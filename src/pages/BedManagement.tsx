@@ -1,18 +1,28 @@
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useState, useMemo } from "react";
+import { useSites, useBlocks, useBeds, useBedActions } from "@/hooks/useBedManagement";
+import { BedWithDetails, getBedStatusColor, getDryingDays } from "@/services/bedService";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { BedCard } from "@/components/beds/BedCard";
+import { BedDetailPanel } from "@/components/beds/BedDetailPanel";
+import { SmartAssignmentDialog } from "@/components/beds/SmartAssignmentDialog";
+import { BatchView } from "@/components/beds/BatchView";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Layers,
+  Maximize,
+  Weight,
+  BarChart3,
+  Package,
+  Wrench,
+  Plus,
+  LayoutGrid,
+  List,
+  Settings2,
+} from "lucide-react";
 
-type BedStatus = "red" | "yellow" | "green" | "grey" | "black";
-
-interface Bed {
-  id: string;
-  status: BedStatus;
-  lotId?: string;
-  weight?: number;
-  daysDrying?: number;
-  region?: string;
-}
-
-const statusLabels: Record<BedStatus, string> = {
+const statusLabels: Record<string, string> = {
   red: "Days 0-3",
   yellow: "Active Drying",
   green: "Finished",
@@ -20,7 +30,7 @@ const statusLabels: Record<BedStatus, string> = {
   black: "Maintenance",
 };
 
-const statusColors: Record<BedStatus, string> = {
+const statusDots: Record<string, string> = {
   red: "bg-status-red",
   yellow: "bg-status-yellow",
   green: "bg-status-green",
@@ -28,122 +38,178 @@ const statusColors: Record<BedStatus, string> = {
   black: "bg-status-black",
 };
 
-const statusText: Record<BedStatus, string> = {
-  red: "text-white",
-  yellow: "text-status-black",
-  green: "text-white",
-  grey: "text-white",
-  black: "text-white",
-};
-
-const generateBeds = (block: string, count: number): Bed[] => {
-  const statuses: BedStatus[] = ["red", "yellow", "green", "grey", "black"];
-  return Array.from({ length: count }, (_, i) => {
-    const s = statuses[Math.floor(Math.random() * 5)];
-    return {
-      id: `${block}-${String(i + 1).padStart(2, "0")}`,
-      status: s,
-      lotId: s !== "grey" && s !== "black" ? `LOT-${2800 + Math.floor(Math.random() * 100)}` : undefined,
-      weight: s !== "grey" && s !== "black" ? Math.floor(Math.random() * 300) + 50 : undefined,
-      daysDrying: s === "red" ? Math.floor(Math.random() * 3) + 1 : s === "yellow" ? Math.floor(Math.random() * 7) + 4 : s === "green" ? Math.floor(Math.random() * 3) + 11 : undefined,
-      region: s !== "grey" && s !== "black" ? ["Nyeri", "Kirinyaga", "Embu"][Math.floor(Math.random() * 3)] : undefined,
-    };
-  });
-};
-
-const blocks = [
-  { id: "A", beds: generateBeds("A", 25) },
-  { id: "B", beds: generateBeds("B", 25) },
-  { id: "C", beds: generateBeds("C", 28) },
-];
-
 const BedManagement = () => {
-  const [selectedBed, setSelectedBed] = useState<Bed | null>(null);
+  const [siteId, setSiteId] = useState<string>("");
+  const [blockFilter, setBlockFilter] = useState<string>("");
+  const [density, setDensity] = useState(30);
+  const [selectedBed, setSelectedBed] = useState<BedWithDetails | null>(null);
+  const [showAssignment, setShowAssignment] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "batch">("grid");
+  const [showDensityConfig, setShowDensityConfig] = useState(false);
+
+  const { data: sites } = useSites();
+  const { data: blocks } = useBlocks(siteId || undefined);
+  const { data: beds, isLoading } = useBeds(siteId || undefined, blockFilter || undefined);
+
+  // Metrics
+  const metrics = useMemo(() => {
+    if (!beds) return null;
+    const totalBeds = beds.length;
+    const totalArea = beds.reduce((s, b) => s + Number(b.surface_area ?? Number(b.length) * Number(b.width)), 0);
+    const totalCapacity = totalArea * density;
+    const occupiedBeds = beds.filter((b) => b.status === "occupied");
+    const usedWeight = occupiedBeds.reduce((s, b) => s + Number(b.active_assignment?.assigned_weight || 0), 0);
+    const utilization = totalCapacity > 0 ? Math.round((usedWeight / totalCapacity) * 100) : 0;
+    const availableCapacity = totalCapacity - usedWeight;
+    const maintenanceBeds = beds.filter((b) => b.status === "maintenance").length;
+    return { totalBeds, totalArea, totalCapacity, utilization, availableCapacity, maintenanceBeds };
+  }, [beds, density]);
+
+  // Group beds by block
+  const bedsByBlock = useMemo(() => {
+    if (!beds) return [];
+    const map = new Map<string, { blockName: string; beds: BedWithDetails[] }>();
+    beds.forEach((bed) => {
+      const key = bed.block_id;
+      if (!map.has(key)) {
+        map.set(key, { blockName: bed.block?.name || "Unknown Block", beds: [] });
+      }
+      map.get(key)!.beds.push(bed);
+    });
+    return Array.from(map.values()).sort((a, b) => a.blockName.localeCompare(b.blockName));
+  }, [beds]);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-serif text-foreground">Bed Management</h1>
-        <p className="text-muted-foreground mt-1">Visual bed grid organized by block</p>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-serif text-foreground">Bed Management</h1>
+          <p className="text-muted-foreground mt-1">Drying command center</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowAssignment(true)} className="gap-2">
+            <Plus className="w-4 h-4" /> Assign Lot
+          </Button>
+        </div>
       </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Select value={siteId} onValueChange={(v) => { setSiteId(v === "all" ? "" : v); setBlockFilter(""); }}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="All Sites" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sites</SelectItem>
+            {sites?.map((s) => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={blockFilter} onValueChange={(v) => setBlockFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="All Blocks" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Blocks</SelectItem>
+            {blocks?.map((b) => (
+              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={showDensityConfig ? "default" : "outline"}
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => setShowDensityConfig(!showDensityConfig)}
+          >
+            <Settings2 className="w-4 h-4" />
+          </Button>
+          {showDensityConfig && (
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                value={density}
+                onChange={(e) => setDensity(Number(e.target.value) || 30)}
+                className="w-20 h-9 text-sm"
+              />
+              <span className="text-xs text-muted-foreground whitespace-nowrap">KG/m²</span>
+            </div>
+          )}
+        </div>
+
+        <div className="ml-auto flex gap-1">
+          <Button variant={viewMode === "grid" ? "default" : "outline"} size="icon" className="h-9 w-9" onClick={() => setViewMode("grid")}>
+            <LayoutGrid className="w-4 h-4" />
+          </Button>
+          <Button variant={viewMode === "batch" ? "default" : "outline"} size="icon" className="h-9 w-9" onClick={() => setViewMode("batch")}>
+            <List className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      {metrics && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <MetricCard title="Total Beds" value={metrics.totalBeds} icon={<Layers className="w-4 h-4" />} />
+          <MetricCard title="Surface Area" value={`${metrics.totalArea.toFixed(0)} m²`} icon={<Maximize className="w-4 h-4" />} />
+          <MetricCard title="Drying Capacity" value={`${metrics.totalCapacity.toFixed(0)} KG`} icon={<Weight className="w-4 h-4" />} />
+          <MetricCard title="Utilization" value={`${metrics.utilization}%`} icon={<BarChart3 className="w-4 h-4" />} />
+          <MetricCard title="Available" value={`${metrics.availableCapacity.toFixed(0)} KG`} icon={<Package className="w-4 h-4" />} />
+          <MetricCard title="Maintenance" value={metrics.maintenanceBeds} icon={<Wrench className="w-4 h-4" />} />
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3">
-        {(Object.keys(statusLabels) as BedStatus[]).map((s) => (
-          <div key={s} className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-sm ${statusColors[s]}`} />
-            <span className="text-xs text-muted-foreground">{statusLabels[s]}</span>
+        {Object.entries(statusLabels).map(([key, label]) => (
+          <div key={key} className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-sm ${statusDots[key]}`} />
+            <span className="text-xs text-muted-foreground">{label}</span>
           </div>
         ))}
       </div>
 
-      {/* Blocks */}
-      {blocks.map((block) => (
-        <div key={block.id} className="bg-card rounded-xl p-5 card-shadow border border-border/50">
-          <h3 className="font-serif text-lg mb-4">Block {block.id}</h3>
-          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
-            {block.beds.map((bed) => (
-              <button
-                key={bed.id}
-                onClick={() => setSelectedBed(bed)}
-                className={`aspect-square rounded-lg ${statusColors[bed.status]} ${statusText[bed.status]} flex flex-col items-center justify-center text-[10px] font-medium hover:opacity-80 transition-opacity cursor-pointer`}
-              >
-                <span>{bed.id}</span>
-                {bed.weight && <span className="text-[8px] opacity-80">{bed.weight}kg</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* Bed Detail Modal */}
-      {selectedBed && (
-        <div className="fixed inset-0 bg-foreground/30 z-50 flex items-center justify-center p-4" onClick={() => setSelectedBed(null)}>
-          <div className="bg-card rounded-2xl p-6 w-full max-w-md card-shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-serif text-xl">Bed {selectedBed.id}</h3>
-              <button onClick={() => setSelectedBed(null)} className="p-1 rounded-lg hover:bg-muted">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className={`status-badge ${statusColors[selectedBed.status]} ${statusText[selectedBed.status]}`}>
-                  {statusLabels[selectedBed.status]}
-                </span>
-              </div>
-              {selectedBed.lotId && (
-                <>
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Lot ID</span>
-                    <span className="text-sm font-medium">{selectedBed.lotId}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Region</span>
-                    <span className="text-sm font-medium">{selectedBed.region}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Weight</span>
-                    <span className="text-sm font-medium">{selectedBed.weight} KG</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Days Drying</span>
-                    <span className="text-sm font-medium">{selectedBed.daysDrying}</span>
-                  </div>
-                </>
-              )}
-              <div className="flex gap-2 pt-2">
-                <button className="flex-1 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
-                  Log Turning
-                </button>
-                <button className="flex-1 py-2.5 bg-muted text-foreground rounded-lg text-sm font-medium hover:bg-muted/80 transition-colors">
-                  Log Cleaning
-                </button>
+      {/* Content */}
+      {isLoading ? (
+        <div className="py-12 text-center text-muted-foreground">Loading beds...</div>
+      ) : viewMode === "grid" ? (
+        /* Grid View */
+        bedsByBlock.length > 0 ? (
+          bedsByBlock.map(({ blockName, beds: blockBeds }) => (
+            <div key={blockName} className="bg-card rounded-xl p-5 card-shadow border border-border/50">
+              <h3 className="font-serif text-lg mb-4">{blockName}</h3>
+              <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
+                {blockBeds.map((bed) => (
+                  <BedCard key={bed.id} bed={bed} onClick={setSelectedBed} />
+                ))}
               </div>
             </div>
+          ))
+        ) : (
+          <div className="py-12 text-center text-muted-foreground">
+            No beds found. Add sites, blocks, and beds from the Sites & Fields page.
           </div>
-        </div>
+        )
+      ) : (
+        /* Batch View */
+        <BatchView beds={beds || []} />
       )}
+
+      {/* Side Panel */}
+      <BedDetailPanel bed={selectedBed} open={!!selectedBed} onClose={() => setSelectedBed(null)} />
+
+      {/* Smart Assignment */}
+      <SmartAssignmentDialog
+        open={showAssignment}
+        onClose={() => setShowAssignment(false)}
+        siteId={siteId || undefined}
+        density={density}
+      />
     </div>
   );
 };
