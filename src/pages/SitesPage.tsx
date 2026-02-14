@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useOrg } from "@/hooks/use-org";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Site = Tables<"sites">;
@@ -15,6 +16,7 @@ type Block = Tables<"blocks"> & { beds_count?: number; occupied_count?: number; 
 const SitesPage = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { orgId } = useOrg();
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
 
   const [showNewSite, setShowNewSite] = useState(false);
@@ -72,10 +74,11 @@ const SitesPage = () => {
 
   const createSite = useMutation({
     mutationFn: async () => {
-      if (!newSiteName.trim()) throw new Error("Site name is required");
+      if (!newSiteName.trim() || !orgId) throw new Error("Site name is required");
       const { error } = await supabase.from("sites").insert({
         name: newSiteName.trim(),
         location: newSiteLocation.trim() || null,
+        organization_id: orgId,
       });
       if (error) throw error;
     },
@@ -91,10 +94,11 @@ const SitesPage = () => {
 
   const createBlock = useMutation({
     mutationFn: async () => {
-      if (!newBlockName.trim() || !selectedSite) throw new Error("Block name is required");
+      if (!newBlockName.trim() || !selectedSite || !orgId) throw new Error("Block name is required");
       const { error } = await supabase.from("blocks").insert({
         name: newBlockName.trim(),
         site_id: selectedSite.id,
+        organization_id: orgId,
       });
       if (error) throw error;
     },
@@ -109,7 +113,7 @@ const SitesPage = () => {
 
   const createBeds = useMutation({
     mutationFn: async () => {
-      if (!bedPrefix.trim() || !selectedBlockIdForBed) throw new Error("Prefix and block are required");
+      if (!bedPrefix.trim() || !selectedBlockIdForBed || !orgId) throw new Error("Prefix and block are required");
       const count = Math.min(Math.max(Number(bedCount) || 1, 1), 100);
       const start = Number(bedStartNum) || 1;
       const length = Number(newBedLength) || 10;
@@ -123,6 +127,7 @@ const SitesPage = () => {
         width,
         surface_area: area,
         material_type: newBedMaterial.trim() || null,
+        organization_id: orgId,
       }));
 
       const { error } = await supabase.from("beds").insert(beds);

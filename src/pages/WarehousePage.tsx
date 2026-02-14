@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useOrg } from "@/hooks/use-org";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { format } from "date-fns";
 
@@ -25,6 +26,7 @@ const WarehousePage = () => {
   const [weight, setWeight] = useState("");
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { orgId } = useOrg();
 
   const { data: lots, isLoading } = useQuery({
     queryKey: ["lots"],
@@ -41,12 +43,13 @@ const WarehousePage = () => {
   const createLot = useMutation({
     mutationFn: async () => {
       const w = Number(weight);
-      if (!lotNumber.trim() || !region.trim() || !w || w <= 0) throw new Error("All fields are required");
+      if (!lotNumber.trim() || !region.trim() || !w || w <= 0 || !orgId) throw new Error("All fields are required");
       const { error } = await supabase.from("lots").insert({
         lot_number: lotNumber.trim(),
         region: region.trim(),
         initial_weight: w,
         current_weight: w,
+        organization_id: orgId,
       });
       if (error) throw error;
     },

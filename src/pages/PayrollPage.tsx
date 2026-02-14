@@ -9,11 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { useToast } from "@/hooks/use-toast";
+import { useOrg } from "@/hooks/use-org";
 import { format } from "date-fns";
 
 const PayrollPage = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { orgId } = useOrg();
   const [showAdd, setShowAdd] = useState(false);
   const [workerId, setWorkerId] = useState("");
   const [periodStart, setPeriodStart] = useState("");
@@ -44,13 +46,14 @@ const PayrollPage = () => {
 
   const createPayroll = useMutation({
     mutationFn: async () => {
-      if (!workerId || !periodStart || !periodEnd) throw new Error("All fields required");
+      if (!workerId || !periodStart || !periodEnd || !orgId) throw new Error("All fields required");
       const { error } = await supabase.from("payroll").insert({
         worker_id: workerId,
         period_start: periodStart,
         period_end: periodEnd,
         total_hours: Number(totalHours) || 0,
         total_pay: Number(totalPay) || 0,
+        organization_id: orgId,
       });
       if (error) throw error;
     },

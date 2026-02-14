@@ -10,6 +10,7 @@ const AuthPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [orgName, setOrgName] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -29,21 +30,14 @@ const AuthPage = () => {
           password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { name },
+            data: { name, org_name: orgName.trim() || undefined },
           },
         });
         if (error) throw error;
-        toast({
-          title: "Account created",
-          description: "Please check your email to verify your account.",
-        });
+        toast({ title: "Account created", description: "Please check your email to verify your account." });
       }
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -64,77 +58,44 @@ const AuthPage = () => {
           <h2 className="font-serif text-xl mb-6">{isLogin ? "Sign In" : "Create Account"}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Full Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={!isLogin}
-                  className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="John Doe"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Organization / Farm Name</label>
+                  <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. Nyeri Coffee Estate" />
+                </div>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Full Name</label>
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} required={!isLogin} className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="John Doe" />
+                </div>
+              </>
             )}
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="you@example.com"
-              />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="you@example.com" />
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="••••••••"
-              />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="••••••••" />
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
+            <button type="submit" disabled={loading} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
               {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
             </button>
           </form>
 
           <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-card px-3 text-muted-foreground">or continue with</span>
-            </div>
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+            <div className="relative flex justify-center text-xs"><span className="bg-card px-3 text-muted-foreground">or continue with</span></div>
           </div>
 
-          <button
-            type="button"
-            onClick={async () => {
-              setLoading(true);
-              try {
-                const result = await lovable.auth.signInWithOAuth("google", {
-                  redirect_uri: window.location.origin + "/auth",
-                });
-                if (result.error) throw result.error;
-              } catch (error: any) {
-                toast({ title: "Error", description: error.message, variant: "destructive" });
-              } finally {
-                setLoading(false);
-              }
-            }}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-2.5 bg-background border border-input rounded-lg text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
-          >
+          <button type="button" onClick={async () => {
+            setLoading(true);
+            try {
+              const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/auth" });
+              if (result.error) throw result.error;
+            } catch (error: any) {
+              toast({ title: "Error", description: error.message, variant: "destructive" });
+            } finally { setLoading(false); }
+          }} disabled={loading} className="w-full flex items-center justify-center gap-3 py-2.5 bg-background border border-input rounded-lg text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50">
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>

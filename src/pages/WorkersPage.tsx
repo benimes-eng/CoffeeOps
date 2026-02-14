@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { useToast } from "@/hooks/use-toast";
+import { useOrg } from "@/hooks/use-org";
 import { Constants } from "@/integrations/supabase/types";
 
 const statusBadge: Record<string, string> = {
@@ -20,6 +21,7 @@ const statusBadge: Record<string, string> = {
 const WorkersPage = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { orgId } = useOrg();
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -39,7 +41,7 @@ const WorkersPage = () => {
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!name.trim()) throw new Error("Name is required");
+      if (!name.trim() || !orgId) throw new Error("Name is required");
       const payload = {
         name: name.trim(),
         role: role.trim() || null,
@@ -51,7 +53,7 @@ const WorkersPage = () => {
         const { error } = await supabase.from("workers").update(payload).eq("id", editId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("workers").insert(payload);
+        const { error } = await supabase.from("workers").insert({ ...payload, organization_id: orgId });
         if (error) throw error;
       }
     },
