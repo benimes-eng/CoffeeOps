@@ -81,7 +81,7 @@ const BedManagement = () => {
       {blocks.map((block) => (
         <div key={block.id} className="bg-card rounded-xl p-5 card-shadow border border-border/50">
           <h3 className="font-serif text-lg mb-4">Block {block.id}</h3>
-          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-13 gap-2">
+          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
             {block.beds.map((bed) => (
               <button
                 key={bed.id}
