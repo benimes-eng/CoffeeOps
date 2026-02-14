@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/use-auth";
 import {
   LayoutDashboard,
   MapPin,
@@ -13,6 +14,7 @@ import {
   ChevronLeft,
   Coffee,
   Menu,
+  LogOut,
 } from "lucide-react";
 
 const navItems = [
@@ -82,6 +84,9 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
 }
 
 export function AppHeader({ sidebarCollapsed, onToggleSidebar }: { sidebarCollapsed: boolean; onToggleSidebar: () => void }) {
+  const { user, signOut } = useAuth();
+  const initials = user?.email?.slice(0, 2).toUpperCase() || "U";
+
   return (
     <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-30">
       <div className="flex items-center gap-4">
@@ -93,9 +98,13 @@ export function AppHeader({ sidebarCollapsed, onToggleSidebar }: { sidebarCollap
         </div>
       </div>
       <div className="flex items-center gap-3">
+        <span className="text-sm text-muted-foreground hidden sm:block">{user?.email}</span>
         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-          <span className="text-xs font-bold text-primary-foreground">JD</span>
+          <span className="text-xs font-bold text-primary-foreground">{initials}</span>
         </div>
+        <button onClick={signOut} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Sign out">
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </header>
   );
