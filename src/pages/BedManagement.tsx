@@ -201,7 +201,7 @@ const BedManagement = () => {
       )}
 
       {/* Side Panel */}
-      <BedDetailPanel bed={selectedBed} open={!!selectedBed} onClose={() => setSelectedBed(null)} />
+      <BedDetailPanel bed={selectedBed} open={!!selectedBed} onClose={() => setSelectedBed(null)} density={density} />
 
       {/* Smart Assignment */}
       <SmartAssignmentDialog

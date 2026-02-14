@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapPin, Plus, Trash2, Grid3X3 } from "lucide-react";
+import { MapPin, Plus, Grid3X3, Layers } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -17,20 +17,21 @@ const SitesPage = () => {
   const qc = useQueryClient();
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
 
-  // Dialogs
   const [showNewSite, setShowNewSite] = useState(false);
   const [showNewBlock, setShowNewBlock] = useState(false);
   const [showNewBed, setShowNewBed] = useState(false);
   const [newSiteName, setNewSiteName] = useState("");
   const [newSiteLocation, setNewSiteLocation] = useState("");
   const [newBlockName, setNewBlockName] = useState("");
-  const [newBedNumber, setNewBedNumber] = useState("");
+  // Bulk bed fields
+  const [bedPrefix, setBedPrefix] = useState("");
+  const [bedCount, setBedCount] = useState("1");
+  const [bedStartNum, setBedStartNum] = useState("1");
   const [newBedLength, setNewBedLength] = useState("10");
   const [newBedWidth, setNewBedWidth] = useState("1.2");
   const [newBedMaterial, setNewBedMaterial] = useState("");
   const [selectedBlockIdForBed, setSelectedBlockIdForBed] = useState<string>("");
 
-  // Queries
   const { data: sites } = useQuery({
     queryKey: ["sites"],
     queryFn: async () => {
@@ -53,7 +54,6 @@ const SitesPage = () => {
         .order("name");
       if (error) throw error;
 
-      // Get bed counts per block
       const blockIds = blocksData.map((b) => b.id);
       const { data: beds } = await supabase.from("beds").select("id, block_id, status").in("block_id", blockIds);
 
@@ -70,7 +70,6 @@ const SitesPage = () => {
     enabled: !!selectedSite,
   });
 
-  // Mutations
   const createSite = useMutation({
     mutationFn: async () => {
       if (!newSiteName.trim()) throw new Error("Site name is required");
@@ -108,33 +107,51 @@ const SitesPage = () => {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const createBed = useMutation({
+  const createBeds = useMutation({
     mutationFn: async () => {
-      if (!newBedNumber.trim() || !selectedBlockIdForBed) throw new Error("Bed number and block are required");
+      if (!bedPrefix.trim() || !selectedBlockIdForBed) throw new Error("Prefix and block are required");
+      const count = Math.min(Math.max(Number(bedCount) || 1, 1), 100);
+      const start = Number(bedStartNum) || 1;
       const length = Number(newBedLength) || 10;
       const width = Number(newBedWidth) || 1.2;
-      const { error } = await supabase.from("beds").insert({
-        bed_number: newBedNumber.trim(),
+      const area = length * width;
+
+      const beds = Array.from({ length: count }, (_, i) => ({
+        bed_number: `${bedPrefix.trim()}-${String(start + i).padStart(2, "0")}`,
         block_id: selectedBlockIdForBed,
         length,
         width,
-        surface_area: length * width,
+        surface_area: area,
         material_type: newBedMaterial.trim() || null,
-      });
+      }));
+
+      const { error } = await supabase.from("beds").insert(beds);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["site-blocks"] });
       qc.invalidateQueries({ queryKey: ["beds"] });
-      toast({ title: "Bed created" });
-      setShowNewBed(false);
-      setNewBedNumber("");
-      setNewBedLength("10");
-      setNewBedWidth("1.2");
-      setNewBedMaterial("");
+      toast({ title: `Beds created successfully` });
+      closeBedDialog();
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
+  const closeBedDialog = () => {
+    setShowNewBed(false);
+    setBedPrefix("");
+    setBedCount("1");
+    setBedStartNum("1");
+    setNewBedLength("10");
+    setNewBedWidth("1.2");
+    setNewBedMaterial("");
+  };
+
+  const previewCount = Math.min(Math.max(Number(bedCount) || 1, 1), 100);
+  const previewStart = Number(bedStartNum) || 1;
+  const previewNames = Array.from({ length: Math.min(previewCount, 5) }, (_, i) =>
+    `${bedPrefix || "X"}-${String(previewStart + i).padStart(2, "0")}`
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -178,7 +195,7 @@ const SitesPage = () => {
           )}
         </div>
 
-        {/* Blocks & Beds */}
+        {/* Blocks */}
         <div className="lg:col-span-2 space-y-4">
           {selectedSite ? (
             <>
@@ -189,7 +206,7 @@ const SitesPage = () => {
                     <Plus className="w-3.5 h-3.5" /> Block
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => { setShowNewBed(true); setSelectedBlockIdForBed(blocks?.[0]?.id || ""); }} className="gap-1.5" disabled={!blocks?.length}>
-                    <Grid3X3 className="w-3.5 h-3.5" /> Bed
+                    <Layers className="w-3.5 h-3.5" /> Beds
                   </Button>
                 </div>
               </div>
@@ -279,10 +296,10 @@ const SitesPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* New Bed Dialog */}
-      <Dialog open={showNewBed} onOpenChange={setShowNewBed}>
+      {/* Bulk Bed Creation Dialog */}
+      <Dialog open={showNewBed} onOpenChange={(v) => !v && closeBedDialog()}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle className="font-serif">New Bed</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-serif">Create Beds</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Block</Label>
@@ -296,9 +313,19 @@ const SitesPage = () => {
                 ))}
               </select>
             </div>
-            <div className="space-y-2">
-              <Label>Bed Number</Label>
-              <Input placeholder="e.g. A-01" value={newBedNumber} onChange={(e) => setNewBedNumber(e.target.value)} />
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label>Prefix</Label>
+                <Input placeholder="e.g. A" value={bedPrefix} onChange={(e) => setBedPrefix(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Start #</Label>
+                <Input type="number" min="1" value={bedStartNum} onChange={(e) => setBedStartNum(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Count</Label>
+                <Input type="number" min="1" max="100" value={bedCount} onChange={(e) => setBedCount(e.target.value)} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -314,14 +341,21 @@ const SitesPage = () => {
               <Label>Material (optional)</Label>
               <Input placeholder="e.g. Raised wire mesh" value={newBedMaterial} onChange={(e) => setNewBedMaterial(e.target.value)} />
             </div>
-            <p className="text-sm text-muted-foreground">
-              Surface area: {((Number(newBedLength) || 0) * (Number(newBedWidth) || 0)).toFixed(1)} m²
-            </p>
+            <div className="bg-muted rounded-lg p-3 space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground">Preview ({previewCount} beds)</p>
+              <p className="text-sm font-mono">
+                {previewNames.join(", ")}{previewCount > 5 ? `, ... ${bedPrefix || "X"}-${String(previewStart + previewCount - 1).padStart(2, "0")}` : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Each: {((Number(newBedLength) || 0) * (Number(newBedWidth) || 0)).toFixed(1)} m²
+              </p>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewBed(false)}>Cancel</Button>
-            <Button onClick={() => createBed.mutate()} disabled={createBed.isPending}>
-              {createBed.isPending ? "Creating..." : "Create Bed"}
+            <Button variant="outline" onClick={closeBedDialog}>Cancel</Button>
+            <Button onClick={() => createBeds.mutate()} disabled={createBeds.isPending} className="gap-2">
+              <Layers className="w-4 h-4" />
+              {createBeds.isPending ? "Creating..." : `Create ${previewCount} Bed(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>
