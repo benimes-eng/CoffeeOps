@@ -1,148 +1,234 @@
-import { useState } from "react";
-import { X } from "lucide-react";
-
-type BedStatus = "red" | "yellow" | "green" | "grey" | "black";
-
-interface Bed {
-  id: string;
-  status: BedStatus;
-  lotId?: string;
-  weight?: number;
-  daysDrying?: number;
-  region?: string;
-}
-
-const statusLabels: Record<BedStatus, string> = {
-  red: "Days 0-3",
-  yellow: "Active Drying",
-  green: "Finished",
-  grey: "Empty",
-  black: "Maintenance",
-};
-
-const statusColors: Record<BedStatus, string> = {
-  red: "bg-status-red",
-  yellow: "bg-status-yellow",
-  green: "bg-status-green",
-  grey: "bg-status-grey",
-  black: "bg-status-black",
-};
-
-const statusText: Record<BedStatus, string> = {
-  red: "text-white",
-  yellow: "text-status-black",
-  green: "text-white",
-  grey: "text-white",
-  black: "text-white",
-};
-
-const generateBeds = (block: string, count: number): Bed[] => {
-  const statuses: BedStatus[] = ["red", "yellow", "green", "grey", "black"];
-  return Array.from({ length: count }, (_, i) => {
-    const s = statuses[Math.floor(Math.random() * 5)];
-    return {
-      id: `${block}-${String(i + 1).padStart(2, "0")}`,
-      status: s,
-      lotId: s !== "grey" && s !== "black" ? `LOT-${2800 + Math.floor(Math.random() * 100)}` : undefined,
-      weight: s !== "grey" && s !== "black" ? Math.floor(Math.random() * 300) + 50 : undefined,
-      daysDrying: s === "red" ? Math.floor(Math.random() * 3) + 1 : s === "yellow" ? Math.floor(Math.random() * 7) + 4 : s === "green" ? Math.floor(Math.random() * 3) + 11 : undefined,
-      region: s !== "grey" && s !== "black" ? ["Nyeri", "Kirinyaga", "Embu"][Math.floor(Math.random() * 3)] : undefined,
-    };
-  });
-};
-
-const blocks = [
-  { id: "A", beds: generateBeds("A", 25) },
-  { id: "B", beds: generateBeds("B", 25) },
-  { id: "C", beds: generateBeds("C", 28) },
-];
+import { useState, useMemo } from "react";
+import {
+  Layers, Activity, Package, Wrench, Grid3X3, List, Plus, Settings2,
+} from "lucide-react";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import {
+  useBedsWithAssignments, useSites, useBlocks,
+  type BedWithAssignment, getDryingColor,
+} from "@/hooks/use-beds";
+import { BedDetailPanel } from "@/components/beds/BedDetailPanel";
+import { SmartAssignment } from "@/components/beds/SmartAssignment";
+import { BatchView } from "@/components/beds/BatchView";
 
 const BedManagement = () => {
-  const [selectedBed, setSelectedBed] = useState<Bed | null>(null);
+  const [siteId, setSiteId] = useState<string>("");
+  const [blockId, setBlockId] = useState<string>("");
+  const [density, setDensity] = useState(30);
+  const [viewMode, setViewMode] = useState<"grid" | "batch">("grid");
+  const [selectedBed, setSelectedBed] = useState<BedWithAssignment | null>(null);
+  const [showAssignment, setShowAssignment] = useState(false);
+  const [showDensityConfig, setShowDensityConfig] = useState(false);
+
+  const { data: sites } = useSites();
+  const { data: blocks } = useBlocks(siteId || undefined);
+  const { data: beds, isLoading } = useBedsWithAssignments(siteId || undefined, blockId || undefined);
+
+  // KPI calculations
+  const kpis = useMemo(() => {
+    if (!beds) return null;
+    const totalBeds = beds.length;
+    const totalArea = beds.reduce((s, b) => s + (b.surface_area ?? 0), 0);
+    const totalCapacity = totalArea * density;
+    const occupiedBeds = beds.filter((b) => b.status === "occupied");
+    const usedArea = occupiedBeds.reduce((s, b) => s + (b.surface_area ?? 0), 0);
+    const usedCapacity = usedArea * density;
+    const utilization = totalCapacity > 0 ? Math.round((usedCapacity / totalCapacity) * 100) : 0;
+    const available = totalCapacity - usedCapacity;
+    const maintenance = beds.filter((b) => b.status === "maintenance").length;
+    return { totalBeds, totalArea, totalCapacity, utilization, available, maintenance };
+  }, [beds, density]);
+
+  // Group beds by block for grid view
+  const bedsByBlock = useMemo(() => {
+    if (!beds) return [];
+    const map = new Map<string, { blockName: string; siteName: string; beds: BedWithAssignment[] }>();
+    beds.forEach((bed) => {
+      const key = bed.block_id;
+      if (!map.has(key)) {
+        map.set(key, { blockName: bed.blocks.name, siteName: bed.blocks.sites.name, beds: [] });
+      }
+      map.get(key)!.beds.push(bed);
+    });
+    return Array.from(map.values()).sort((a, b) => a.blockName.localeCompare(b.blockName));
+  }, [beds]);
+
+  // Status legend
+  const legend = [
+    { label: "Empty", bg: "bg-status-grey" },
+    { label: "Day 0-3", bg: "bg-status-red" },
+    { label: "Active Drying", bg: "bg-status-yellow" },
+    { label: "Finished", bg: "bg-status-green" },
+    { label: "Maintenance", bg: "bg-status-black" },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-serif text-foreground">Bed Management</h1>
-        <p className="text-muted-foreground mt-1">Visual bed grid organized by block</p>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-serif text-foreground">Bed Management</h1>
+          <p className="text-muted-foreground mt-1">Drying command center</p>
+        </div>
+        <button
+          onClick={() => setShowAssignment(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity self-start"
+        >
+          <Plus className="w-4 h-4" />
+          New Assignment
+        </button>
+      </div>
+
+      {/* KPI Cards */}
+      {kpis && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <MetricCard title="Total Beds" value={kpis.totalBeds} icon={<Grid3X3 className="w-4 h-4" />} />
+          <MetricCard title="Surface Area" value={`${kpis.totalArea} m²`} icon={<Layers className="w-4 h-4" />} />
+          <MetricCard title="Capacity" value={`${kpis.totalCapacity.toLocaleString()} KG`} icon={<Package className="w-4 h-4" />} />
+          <MetricCard title="Utilization" value={`${kpis.utilization}%`} icon={<Activity className="w-4 h-4" />} />
+          <MetricCard title="Available" value={`${kpis.available.toLocaleString()} KG`} icon={<Package className="w-4 h-4" />} />
+          <MetricCard title="Maintenance" value={kpis.maintenance} icon={<Wrench className="w-4 h-4" />} />
+        </div>
+      )}
+
+      {/* Filters & Controls */}
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          value={siteId}
+          onChange={(e) => { setSiteId(e.target.value); setBlockId(""); }}
+          className="px-3 py-2 bg-card border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="">All Sites</option>
+          {sites?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+
+        <select
+          value={blockId}
+          onChange={(e) => setBlockId(e.target.value)}
+          className="px-3 py-2 bg-card border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="">All Blocks</option>
+          {blocks?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+
+        {/* Density Config */}
+        <div className="relative">
+          <button
+            onClick={() => setShowDensityConfig(!showDensityConfig)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-card border border-input rounded-lg text-sm hover:bg-muted transition-colors"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            {density} KG/m²
+          </button>
+          {showDensityConfig && (
+            <div className="absolute top-full mt-1 left-0 bg-card border border-border rounded-lg p-3 card-shadow z-20 w-48">
+              <label className="text-xs text-muted-foreground font-medium">Drying Density</label>
+              <input
+                type="number"
+                value={density}
+                onChange={(e) => setDensity(Number(e.target.value) || 30)}
+                className="w-full mt-1 px-2 py-1.5 bg-background border border-input rounded text-sm"
+                min={10}
+                max={100}
+              />
+              <button
+                onClick={() => setShowDensityConfig(false)}
+                className="w-full mt-2 py-1.5 bg-primary text-primary-foreground rounded text-xs font-medium"
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="ml-auto flex bg-muted p-0.5 rounded-lg">
+          <button
+            onClick={() => setViewMode("grid")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              viewMode === "grid" ? "bg-card text-foreground card-shadow" : "text-muted-foreground"
+            }`}
+          >
+            <Grid3X3 className="w-3.5 h-3.5" /> Grid
+          </button>
+          <button
+            onClick={() => setViewMode("batch")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              viewMode === "batch" ? "bg-card text-foreground card-shadow" : "text-muted-foreground"
+            }`}
+          >
+            <List className="w-3.5 h-3.5" /> Batch
+          </button>
+        </div>
       </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3">
-        {(Object.keys(statusLabels) as BedStatus[]).map((s) => (
-          <div key={s} className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-sm ${statusColors[s]}`} />
-            <span className="text-xs text-muted-foreground">{statusLabels[s]}</span>
+        {legend.map((l) => (
+          <div key={l.label} className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-sm ${l.bg}`} />
+            <span className="text-xs text-muted-foreground">{l.label}</span>
           </div>
         ))}
       </div>
 
-      {/* Blocks */}
-      {blocks.map((block) => (
-        <div key={block.id} className="bg-card rounded-xl p-5 card-shadow border border-border/50">
-          <h3 className="font-serif text-lg mb-4">Block {block.id}</h3>
-          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
-            {block.beds.map((bed) => (
-              <button
-                key={bed.id}
-                onClick={() => setSelectedBed(bed)}
-                className={`aspect-square rounded-lg ${statusColors[bed.status]} ${statusText[bed.status]} flex flex-col items-center justify-center text-[10px] font-medium hover:opacity-80 transition-opacity cursor-pointer`}
-              >
-                <span>{bed.id}</span>
-                {bed.weight && <span className="text-[8px] opacity-80">{bed.weight}kg</span>}
-              </button>
-            ))}
-          </div>
+      {/* Content */}
+      {isLoading ? (
+        <div className="text-center py-12 text-muted-foreground">Loading beds...</div>
+      ) : viewMode === "grid" ? (
+        <div className="space-y-6">
+          {bedsByBlock.map((group) => (
+            <div key={group.blockName} className="bg-card rounded-xl p-5 card-shadow border border-border/50">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-serif text-lg">{group.blockName}</h3>
+                  <p className="text-xs text-muted-foreground">{group.siteName} · {group.beds.length} beds</p>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {group.beds.filter((b) => b.status === "occupied").length} occupied · {group.beds.filter((b) => b.status === "empty").length} empty
+                </div>
+              </div>
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+                {group.beds.map((bed) => {
+                  const color = getDryingColor(bed.dryingPhase);
+                  return (
+                    <button
+                      key={bed.id}
+                      onClick={() => setSelectedBed(bed)}
+                      className={`relative rounded-lg ${color.bg} ${color.text} p-2 flex flex-col items-center justify-center aspect-square hover:opacity-80 transition-all cursor-pointer group`}
+                      title={`${bed.bed_number} · ${bed.surface_area} m² · ${color.label}`}
+                    >
+                      <span className="text-[11px] font-bold font-mono">{bed.bed_number}</span>
+                      <span className="text-[9px] opacity-80">{bed.surface_area}m²</span>
+                      {bed.activeAssignment && (
+                        <span className="text-[8px] opacity-70">{bed.activeAssignment.assigned_weight}kg</span>
+                      )}
+                      {bed.dryingDays !== undefined && bed.dryingDays >= 0 && (
+                        <span className="text-[8px] opacity-70">D{bed.dryingDays}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {bedsByBlock.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              No beds found. Create sites and blocks first, then add beds.
+            </div>
+          )}
         </div>
-      ))}
+      ) : (
+        <BatchView beds={beds ?? []} onSelectBed={setSelectedBed} />
+      )}
 
-      {/* Bed Detail Modal */}
+      {/* Detail Panel */}
       {selectedBed && (
-        <div className="fixed inset-0 bg-foreground/30 z-50 flex items-center justify-center p-4" onClick={() => setSelectedBed(null)}>
-          <div className="bg-card rounded-2xl p-6 w-full max-w-md card-shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-serif text-xl">Bed {selectedBed.id}</h3>
-              <button onClick={() => setSelectedBed(null)} className="p-1 rounded-lg hover:bg-muted">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className={`status-badge ${statusColors[selectedBed.status]} ${statusText[selectedBed.status]}`}>
-                  {statusLabels[selectedBed.status]}
-                </span>
-              </div>
-              {selectedBed.lotId && (
-                <>
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Lot ID</span>
-                    <span className="text-sm font-medium">{selectedBed.lotId}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Region</span>
-                    <span className="text-sm font-medium">{selectedBed.region}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Weight</span>
-                    <span className="text-sm font-medium">{selectedBed.weight} KG</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Days Drying</span>
-                    <span className="text-sm font-medium">{selectedBed.daysDrying}</span>
-                  </div>
-                </>
-              )}
-              <div className="flex gap-2 pt-2">
-                <button className="flex-1 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
-                  Log Turning
-                </button>
-                <button className="flex-1 py-2.5 bg-muted text-foreground rounded-lg text-sm font-medium hover:bg-muted/80 transition-colors">
-                  Log Cleaning
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BedDetailPanel bed={selectedBed} onClose={() => setSelectedBed(null)} />
+      )}
+
+      {/* Smart Assignment Dialog */}
+      {showAssignment && (
+        <SmartAssignment density={density} onClose={() => setShowAssignment(false)} />
       )}
     </div>
   );
