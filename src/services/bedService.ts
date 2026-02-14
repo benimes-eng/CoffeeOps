@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import type { Tables } from "@/integrations/supabase/types";
 
 export type Bed = Tables<"beds"> & {
   block?: Tables<"blocks"> & { site?: Tables<"sites"> };
@@ -11,26 +11,17 @@ export type BedWithDetails = Bed;
 export async function fetchBedsWithDetails(siteId?: string, blockId?: string) {
   let query = supabase
     .from("beds")
-    .select(`
-      *,
-      block:blocks!beds_block_id_fkey(*, site:sites!blocks_site_id_fkey(*))
-    `)
+    .select(`*, block:blocks!beds_block_id_fkey(*, site:sites!blocks_site_id_fkey(*))`)
     .order("bed_number");
 
-  if (blockId) {
-    query = query.eq("block_id", blockId);
-  }
+  if (blockId) query = query.eq("block_id", blockId);
 
   const { data: beds, error } = await query;
   if (error) throw error;
 
-  // Filter by site if needed
   let filtered = beds || [];
-  if (siteId) {
-    filtered = filtered.filter((b: any) => b.block?.site_id === siteId);
-  }
+  if (siteId) filtered = filtered.filter((b: any) => b.block?.site_id === siteId);
 
-  // Fetch active assignments for all beds
   const bedIds = filtered.map((b) => b.id);
   const { data: assignments } = await supabase
     .from("bed_assignments")
@@ -80,6 +71,13 @@ export async function fetchBedActivityLogs(bedId: string) {
   return data;
 }
 
+async function getUserOrgId(): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+  const { data } = await supabase.from("profiles").select("organization_id").eq("user_id", user.id).single();
+  return data?.organization_id ?? "";
+}
+
 export async function logBedAction(
   bedId: string,
   actionType: string,
@@ -87,12 +85,14 @@ export async function logBedAction(
   bedAssignmentId?: string
 ) {
   const { data: { user } } = await supabase.auth.getUser();
+  const orgId = await getUserOrgId();
   const { error } = await supabase.from("bed_activity_logs").insert({
     bed_id: bedId,
     action_type: actionType as any,
     description,
     bed_assignment_id: bedAssignmentId || null,
     performed_by: user?.id || null,
+    organization_id: orgId,
   });
   if (error) throw error;
 }
@@ -104,14 +104,14 @@ export async function assignLotToBed(
   density: number,
   area: number
 ) {
-  // Update bed status
+  const orgId = await getUserOrgId();
+
   const { error: bedError } = await supabase
     .from("beds")
     .update({ status: "occupied" as any })
     .eq("id", bedId);
   if (bedError) throw bedError;
 
-  // Create assignment
   const { data: assignment, error: assignError } = await supabase
     .from("bed_assignments")
     .insert({
@@ -120,14 +120,13 @@ export async function assignLotToBed(
       assigned_weight: weight,
       assigned_area: area,
       density_used: density,
+      organization_id: orgId,
     })
     .select()
     .single();
   if (assignError) throw assignError;
 
-  // Log activity
   await logBedAction(bedId, "assignment", `Assigned ${weight} KG from lot`, assignment.id);
-
   return assignment;
 }
 
@@ -136,7 +135,6 @@ export async function markBedFinished(bedId: string, assignmentId: string) {
     .from("bed_assignments")
     .update({ is_active: false, completed_at: new Date().toISOString() })
     .eq("id", assignmentId);
-
   await supabase.from("beds").update({ status: "empty" as any }).eq("id", bedId);
   await logBedAction(bedId, "finished", "Drying complete", assignmentId);
 }
