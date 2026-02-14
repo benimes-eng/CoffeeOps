@@ -61,39 +61,30 @@ export type Database = {
       }
       bed_assignments: {
         Row: {
-          assigned_area: number | null
           assigned_date: string
           assigned_weight: number
           bed_id: string
-          completed_at: string | null
           created_at: string
-          density_used: number
           expected_completion: string | null
           id: string
           is_active: boolean
           lot_id: string
         }
         Insert: {
-          assigned_area?: number | null
           assigned_date?: string
           assigned_weight: number
           bed_id: string
-          completed_at?: string | null
           created_at?: string
-          density_used?: number
           expected_completion?: string | null
           id?: string
           is_active?: boolean
           lot_id: string
         }
         Update: {
-          assigned_area?: number | null
           assigned_date?: string
           assigned_weight?: number
           bed_id?: string
-          completed_at?: string | null
           created_at?: string
-          density_used?: number
           expected_completion?: string | null
           id?: string
           is_active?: boolean
@@ -503,9 +494,6 @@ export type Database = {
         | "removal"
         | "maintenance_start"
         | "maintenance_end"
-        | "rain_cover"
-        | "finished"
-        | "maintenance_flag"
       bed_status: "empty" | "occupied" | "maintenance"
       inventory_category: "machinery" | "equipment" | "consumable"
       lot_status: "received" | "drying" | "finished" | "shipped"
@@ -648,9 +636,6 @@ export const Constants = {
         "removal",
         "maintenance_start",
         "maintenance_end",
-        "rain_cover",
-        "finished",
-        "maintenance_flag",
       ],
       bed_status: ["empty", "occupied", "maintenance"],
       inventory_category: ["machinery", "equipment", "consumable"],
