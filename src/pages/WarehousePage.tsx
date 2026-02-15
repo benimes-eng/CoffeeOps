@@ -140,7 +140,7 @@ const WarehousePage = () => {
             </div>
             <div className="space-y-2">
               <Label>Region</Label>
-              <Input placeholder="e.g. Nyeri" value={region} onChange={(e) => setRegion(e.target.value)} />
+              <Input placeholder="e.g. Sidama" value={region} onChange={(e) => setRegion(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Intake Weight (KG)</Label>
