@@ -125,7 +125,6 @@ const SitesPage = () => {
         block_id: selectedBlockIdForBed,
         length,
         width,
-        surface_area: area,
         material_type: newBedMaterial.trim() || null,
         organization_id: orgId,
       }));
