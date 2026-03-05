@@ -14,6 +14,8 @@ import PayrollPage from "./pages/PayrollPage";
 import InventoryPage from "./pages/InventoryPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
+import GrindingPage from "./pages/GrindingPage";
+import ShipmentPage from "./pages/ShipmentPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 
