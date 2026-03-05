@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, MapPin, Grid3X3, Warehouse, Users, DollarSign, Wrench, BarChart3, Settings,
-  ChevronLeft, Coffee, Menu, LogOut, Bell,
+  ChevronLeft, Coffee, Menu, LogOut, Bell, Truck,
 } from "lucide-react";
 
 const navItems = [
