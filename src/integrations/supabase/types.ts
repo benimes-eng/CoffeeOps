@@ -79,6 +79,7 @@ export type Database = {
           created_at: string
           density_used: number
           expected_completion: string | null
+          final_weight: number | null
           id: string
           is_active: boolean
           lot_id: string
@@ -93,6 +94,7 @@ export type Database = {
           created_at?: string
           density_used?: number
           expected_completion?: string | null
+          final_weight?: number | null
           id?: string
           is_active?: boolean
           lot_id: string
@@ -107,6 +109,7 @@ export type Database = {
           created_at?: string
           density_used?: number
           expected_completion?: string | null
+          final_weight?: number | null
           id?: string
           is_active?: boolean
           lot_id?: string
@@ -228,6 +231,57 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grinding_batches: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          dry_weight: number
+          ground_weight: number | null
+          id: string
+          lot_id: string
+          organization_id: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          dry_weight: number
+          ground_weight?: number | null
+          id?: string
+          lot_id: string
+          organization_id: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          dry_weight?: number
+          ground_weight?: number | null
+          id?: string
+          lot_id?: string
+          organization_id?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grinding_batches_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grinding_batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -525,6 +579,57 @@ export type Database = {
           },
         ]
       }
+      shipments: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          destination: string
+          id: string
+          lot_id: string
+          organization_id: string
+          shipment_date: string
+          status: string
+          weight: number
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          destination?: string
+          id?: string
+          lot_id: string
+          organization_id: string
+          shipment_date?: string
+          status?: string
+          weight: number
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          destination?: string
+          id?: string
+          lot_id?: string
+          organization_id?: string
+          shipment_date?: string
+          status?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipments_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shipments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sites: {
         Row: {
           created_at: string
@@ -704,7 +809,14 @@ export type Database = {
         | "maintenance_flag"
       bed_status: "empty" | "occupied" | "maintenance"
       inventory_category: "machinery" | "equipment" | "consumable"
-      lot_status: "received" | "drying" | "finished" | "shipped"
+      lot_status:
+        | "received"
+        | "drying"
+        | "finished"
+        | "shipped"
+        | "ready_for_grinding"
+        | "grinding"
+        | "ready_for_shipment"
       movement_type: "in" | "out"
       wage_type: "daily" | "hourly" | "monthly"
       worker_status: "active" | "on_leave" | "terminated"
@@ -850,7 +962,15 @@ export const Constants = {
       ],
       bed_status: ["empty", "occupied", "maintenance"],
       inventory_category: ["machinery", "equipment", "consumable"],
-      lot_status: ["received", "drying", "finished", "shipped"],
+      lot_status: [
+        "received",
+        "drying",
+        "finished",
+        "shipped",
+        "ready_for_grinding",
+        "grinding",
+        "ready_for_shipment",
+      ],
       movement_type: ["in", "out"],
       wage_type: ["daily", "hourly", "monthly"],
       worker_status: ["active", "on_leave", "terminated"],
