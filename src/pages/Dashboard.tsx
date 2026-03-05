@@ -1,5 +1,5 @@
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { Layers, Activity, Package, Users, Clock } from "lucide-react";
+import { Layers, Activity, Package, Users, Clock, Truck } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -9,13 +9,27 @@ import { differenceInDays, format } from "date-fns";
 
 const DENSITY = 30;
 
+const shipmentStatusSteps = ["preparing", "in_transit", "arrived", "confirmed"];
+const shipmentStatusLabels: Record<string, string> = {
+  preparing: "Preparing",
+  in_transit: "In Transit",
+  arrived: "Arrived",
+  confirmed: "Completed",
+};
+const shipmentStatusColors: Record<string, string> = {
+  preparing: "bg-muted text-muted-foreground",
+  in_transit: "bg-info/10 text-info",
+  arrived: "bg-warning/10 text-warning",
+  confirmed: "bg-success/10 text-success",
+};
+
 function useDashboardData() {
   const beds = useQuery({
     queryKey: ["dashboard-beds"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("beds")
-        .select("id, status, surface_area, block_id, blocks(name)");
+        .select("id, status, surface_area, block_id, blocks(name, site_id, sites(name))");
       if (error) throw error;
       return data;
     },
@@ -59,25 +73,39 @@ function useDashboardData() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("bed_activity_logs")
-        .select("id, action_type, description, created_at, bed_id, beds(bed_number)")
+        .select("id, action_type, description, created_at, bed_id, beds(bed_number, block_id, blocks(name, site_id, sites(name)))")
         .order("created_at", { ascending: false })
-        .limit(10);
+        .limit(15);
       if (error) throw error;
       return data;
     },
   });
 
-  return { beds, assignments, lots, workers, activityLogs };
+  const shipments = useQuery({
+    queryKey: ["dashboard-shipments"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("shipments")
+        .select("id, status, destination, shipment_date, lot_id, lots(lot_number)")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  return { beds, assignments, lots, workers, activityLogs, shipments };
 }
 
 const Dashboard = () => {
-  const { beds, assignments, lots, workers, activityLogs } = useDashboardData();
+  const { beds, assignments, lots, workers, activityLogs, shipments } = useDashboardData();
 
   const allBeds = beds.data ?? [];
   const activeAssignments = (assignments.data ?? []).filter((a) => a.is_active);
   const allLots = lots.data ?? [];
   const allWorkers = workers.data ?? [];
   const recentActivity = activityLogs.data ?? [];
+  const recentShipments = (shipments.data ?? []) as any[];
 
   // Metrics
   const totalSurfaceArea = allBeds.reduce((s, b) => s + (Number(b.surface_area) || 0), 0);
@@ -88,6 +116,9 @@ const Dashboard = () => {
   const activeBatches = allLots.filter((l) => l.status === "drying").length;
   const activeWorkers = allWorkers.filter((w) => w.status === "active").length;
 
+  // Latest shipment for status widget
+  const latestShipment = recentShipments[0];
+
   // Pie chart - bed status distribution
   const now = new Date();
   const statusCounts = { critical: 0, active: 0, finished: 0, empty: 0, maintenance: 0 };
@@ -96,9 +127,7 @@ const Dashboard = () => {
       statusCounts.maintenance++;
     } else if (bed.status === "empty") {
       const assignment = activeAssignments.find((a) => a.bed_id === bed.id);
-      if (!assignment) {
-        statusCounts.empty++;
-      }
+      if (!assignment) statusCounts.empty++;
     } else {
       const assignment = activeAssignments.find((a) => a.bed_id === bed.id);
       if (assignment) {
@@ -111,7 +140,6 @@ const Dashboard = () => {
     }
   });
 
-  // Check for finished lots
   const finishedBeds = allLots.filter((l) => l.status === "finished").length;
   statusCounts.finished = finishedBeds;
 
@@ -127,9 +155,7 @@ const Dashboard = () => {
   const blockMap = new Map<string, { name: string; occupied: number; empty: number; maintenance: number }>();
   allBeds.forEach((bed) => {
     const blockName = (bed as any).blocks?.name ?? "Unknown";
-    if (!blockMap.has(blockName)) {
-      blockMap.set(blockName, { name: blockName, occupied: 0, empty: 0, maintenance: 0 });
-    }
+    if (!blockMap.has(blockName)) blockMap.set(blockName, { name: blockName, occupied: 0, empty: 0, maintenance: 0 });
     const entry = blockMap.get(blockName)!;
     if (bed.status === "maintenance") entry.maintenance++;
     else if (bed.status === "occupied") entry.occupied++;
@@ -137,20 +163,24 @@ const Dashboard = () => {
   });
   const barData = Array.from(blockMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Activity log formatting
+  // Activity log formatting with site/block/bed details
   const formatAction = (log: any) => {
     const bedNum = log.beds?.bed_number ?? "Unknown";
+    const blockName = (log.beds as any)?.blocks?.name ?? "";
+    const siteName = (log.beds as any)?.blocks?.sites?.name ?? "";
+    const location = [siteName, blockName].filter(Boolean).join(" – ");
+
     const actionMap: Record<string, string> = {
-      turning: `Bed ${bedNum} turned`,
-      cleaning: `Bed ${bedNum} cleaned/sorted`,
-      inspection: `Bed ${bedNum} inspected`,
-      assignment: `Coffee assigned to Bed ${bedNum}`,
-      removal: `Coffee removed from Bed ${bedNum}`,
-      maintenance_start: `Bed ${bedNum} flagged for maintenance`,
-      maintenance_end: `Bed ${bedNum} returned from maintenance`,
-      rain_cover: `Rain cover deployed on Bed ${bedNum}`,
-      finished: `Bed ${bedNum} marked as finished`,
-      maintenance_flag: `Bed ${bedNum} flagged for maintenance`,
+      turning: `Coffee turning at ${location} – Bed ${bedNum}`,
+      cleaning: `Cleaning/sorting at ${location} – Bed ${bedNum}`,
+      inspection: `Inspection at ${location} – Bed ${bedNum}`,
+      assignment: `Coffee assigned at ${location} – Bed ${bedNum}`,
+      removal: `Coffee removed from ${location} – Bed ${bedNum}`,
+      maintenance_start: `Maintenance flagged at ${location} – Bed ${bedNum}`,
+      maintenance_end: `Maintenance resolved at ${location} – Bed ${bedNum}`,
+      rain_cover: `Rain cover deployed at ${location} – Bed ${bedNum}`,
+      finished: `Coffee drying completed at ${location} – Bed ${bedNum}`,
+      maintenance_flag: `Maintenance flagged at ${location} – Bed ${bedNum}`,
     };
     return log.description || actionMap[log.action_type] || `${log.action_type} on Bed ${bedNum}`;
   };
@@ -166,36 +196,47 @@ const Dashboard = () => {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <MetricCard
-          title="Drying Capacity"
-          value={isLoading ? "..." : totalCapacity.toLocaleString()}
-          subtitle="KG total"
-          icon={<Layers className="w-4 h-4" />}
-        />
-        <MetricCard
-          title="Utilization"
-          value={isLoading ? "..." : `${utilization}%`}
-          subtitle="current"
-          icon={<Activity className="w-4 h-4" />}
-        />
-        <MetricCard
-          title="Available Space"
-          value={isLoading ? "..." : availableCapacity.toLocaleString()}
-          subtitle="KG remaining"
-          icon={<Package className="w-4 h-4" />}
-        />
-        <MetricCard
-          title="Active Batches"
-          value={isLoading ? "..." : activeBatches}
-          subtitle="drying"
-          icon={<Clock className="w-4 h-4" />}
-        />
-        <MetricCard
-          title="Workers Active"
-          value={isLoading ? "..." : activeWorkers}
-          subtitle="total active"
-          icon={<Users className="w-4 h-4" />}
-        />
+        <MetricCard title="Drying Capacity" value={isLoading ? "..." : totalCapacity.toLocaleString()} subtitle="KG total" icon={<Layers className="w-4 h-4" />} />
+        <MetricCard title="Utilization" value={isLoading ? "..." : `${utilization}%`} subtitle="current" icon={<Activity className="w-4 h-4" />} />
+        <MetricCard title="Available Space" value={isLoading ? "..." : availableCapacity.toLocaleString()} subtitle="KG remaining" icon={<Package className="w-4 h-4" />} />
+        <MetricCard title="Active Batches" value={isLoading ? "..." : activeBatches} subtitle="drying" icon={<Clock className="w-4 h-4" />} />
+        <MetricCard title="Workers Active" value={isLoading ? "..." : activeWorkers} subtitle="total active" icon={<Users className="w-4 h-4" />} />
+      </div>
+
+      {/* Shipment Status Widget */}
+      <div className="bg-card rounded-xl p-6 card-shadow border border-border/50">
+        <div className="flex items-center gap-2 mb-4">
+          <Truck className="w-5 h-5 text-muted-foreground" />
+          <h3 className="font-serif text-lg">Shipment Status</h3>
+        </div>
+        {latestShipment ? (
+          <div>
+            <p className="text-sm text-muted-foreground mb-3">
+              {(latestShipment as any).lots?.lot_number} → {latestShipment.destination}
+            </p>
+            <div className="flex items-center gap-2">
+              {shipmentStatusSteps.map((step, i) => {
+                const stepIndex = shipmentStatusSteps.indexOf(latestShipment.status);
+                const isActive = i <= stepIndex;
+                return (
+                  <div key={step} className="flex items-center gap-2 flex-1">
+                    <div className={`flex-1 h-2 rounded-full ${isActive ? "bg-primary" : "bg-muted"}`} />
+                    {i === shipmentStatusSteps.length - 1 ? null : null}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between mt-2">
+              {shipmentStatusSteps.map((step) => (
+                <span key={step} className={`text-[10px] ${step === latestShipment.status ? "text-primary font-semibold" : "text-muted-foreground"}`}>
+                  {shipmentStatusLabels[step]}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No shipments yet.</p>
+        )}
       </div>
 
       {/* Charts Row */}
@@ -210,14 +251,7 @@ const Dashboard = () => {
                     <Cell key={index} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(0, 0%, 100%)",
-                    border: "1px solid hsl(35, 15%, 88%)",
-                    borderRadius: "8px",
-                    fontSize: "13px",
-                  }}
-                />
+                <Tooltip contentStyle={{ backgroundColor: "hsl(0, 0%, 100%)", border: "1px solid hsl(35, 15%, 88%)", borderRadius: "8px", fontSize: "13px" }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
               </PieChart>
             </ResponsiveContainer>
@@ -234,14 +268,7 @@ const Dashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(35, 15%, 88%)" />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(0, 0%, 100%)",
-                    border: "1px solid hsl(35, 15%, 88%)",
-                    borderRadius: "8px",
-                    fontSize: "13px",
-                  }}
-                />
+                <Tooltip contentStyle={{ backgroundColor: "hsl(0, 0%, 100%)", border: "1px solid hsl(35, 15%, 88%)", borderRadius: "8px", fontSize: "13px" }} />
                 <Bar dataKey="occupied" fill="hsl(25, 45%, 22%)" radius={[4, 4, 0, 0]} name="Occupied" />
                 <Bar dataKey="empty" fill="hsl(35, 20%, 80%)" radius={[4, 4, 0, 0]} name="Empty" />
                 <Bar dataKey="maintenance" fill="hsl(0, 72%, 51%)" radius={[4, 4, 0, 0]} name="Maintenance" />
@@ -258,9 +285,23 @@ const Dashboard = () => {
       <div className="bg-card rounded-xl p-6 card-shadow border border-border/50">
         <h3 className="font-serif text-lg mb-4">Recent Activity</h3>
         <div className="space-y-3">
-          {recentActivity.length === 0 && (
+          {recentActivity.length === 0 && recentShipments.length === 0 && (
             <p className="text-muted-foreground text-sm">No recent activity.</p>
           )}
+          {/* Shipment arrival events */}
+          {recentShipments
+            .filter((s: any) => s.status === "confirmed")
+            .map((s: any) => (
+              <div key={`ship-${s.id}`} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0">
+                <span className="text-xs text-muted-foreground font-mono w-16 pt-0.5">
+                  {s.confirmed_at ? format(new Date(s.confirmed_at), "HH:mm") : "—"}
+                </span>
+                <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-success" />
+                <p className="text-sm text-foreground">
+                  Shipment {(s as any).lots?.lot_number} arrived at {s.destination}
+                </p>
+              </div>
+            ))}
           {recentActivity.map((log) => (
             <div key={log.id} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0">
               <span className="text-xs text-muted-foreground font-mono w-16 pt-0.5">
@@ -268,14 +309,15 @@ const Dashboard = () => {
               </span>
               <div
                 className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                  ["assignment", "removal"].includes(log.action_type)
-                    ? "bg-success"
-                    : ["maintenance_start", "maintenance_flag"].includes(log.action_type)
-                    ? "bg-destructive"
+                  ["assignment", "removal"].includes(log.action_type) ? "bg-success"
+                    : ["maintenance_start", "maintenance_flag"].includes(log.action_type) ? "bg-destructive"
                     : "bg-accent"
                 }`}
               />
-              <p className="text-sm text-foreground">{formatAction(log)}</p>
+              <div>
+                <p className="text-sm text-foreground">{formatAction(log)}</p>
+                <p className="text-[10px] text-muted-foreground">{format(new Date(log.created_at), "MMM dd, yyyy")}</p>
+              </div>
             </div>
           ))}
         </div>

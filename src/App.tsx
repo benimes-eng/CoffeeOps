@@ -14,6 +14,8 @@ import PayrollPage from "./pages/PayrollPage";
 import InventoryPage from "./pages/InventoryPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
+import GrindingPage from "./pages/GrindingPage";
+import ShipmentPage from "./pages/ShipmentPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 
@@ -44,6 +46,8 @@ function ProtectedRoutes() {
         <Route path="/workers" element={<WorkersPage />} />
         <Route path="/payroll" element={<PayrollPage />} />
         <Route path="/inventory" element={<InventoryPage />} />
+        <Route path="/grinding" element={<GrindingPage />} />
+        <Route path="/shipments" element={<ShipmentPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
