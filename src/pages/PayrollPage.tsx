@@ -105,7 +105,7 @@ const PayrollPage = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <MetricCard title="Total Wages" value={`KES ${totalWages.toLocaleString()}`} icon={<DollarSign className="w-4 h-4" />} />
+        <MetricCard title="Total Wages" value={`ETB ${totalWages.toLocaleString()}`} icon={<DollarSign className="w-4 h-4" />} />
         <MetricCard title="Entries" value={payrolls?.length || 0} />
         <MetricCard title="Pending Approval" value={pending} />
       </div>
