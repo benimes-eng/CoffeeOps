@@ -4,12 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useOrg } from "@/hooks/use-org";
 import { toast } from "@/hooks/use-toast";
-import { Shield, UserCog, Trash2, UserPlus, UserX } from "lucide-react";
+import { Shield, UserCog, Trash2, UserPlus, UserX, CheckCircle, XCircle, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { logAudit } from "@/services/auditService";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -38,14 +39,20 @@ const SettingsPage = () => {
     queryFn: async () => {
       const { data: roles, error: rolesErr } = await supabase.from("user_roles").select("id, user_id, role");
       if (rolesErr) throw rolesErr;
-      const { data: profiles, error: profErr } = await supabase.from("profiles").select("user_id, name, email");
+      const { data: profiles, error: profErr } = await supabase.from("profiles").select("user_id, name, email, is_approved");
       if (profErr) throw profErr;
       const profileMap = new Map(profiles.map((p) => [p.user_id, p]));
-      const userMap = new Map<string, { user_id: string; name: string; email: string; roles: { id: string; role: AppRole }[] }>();
+      const userMap = new Map<string, { user_id: string; name: string; email: string; is_approved: boolean; roles: { id: string; role: AppRole }[] }>();
       roles.forEach((r) => {
         if (!userMap.has(r.user_id)) {
           const profile = profileMap.get(r.user_id);
-          userMap.set(r.user_id, { user_id: r.user_id, name: profile?.name ?? "Unknown", email: profile?.email ?? "", roles: [] });
+          userMap.set(r.user_id, {
+            user_id: r.user_id,
+            name: profile?.name ?? "Unknown",
+            email: profile?.email ?? "",
+            is_approved: (profile as any)?.is_approved ?? true,
+            roles: [],
+          });
         }
         userMap.get(r.user_id)!.roles.push({ id: r.id, role: r.role });
       });
@@ -54,20 +61,58 @@ const SettingsPage = () => {
     enabled: isOwner,
   });
 
+  const pendingUsers = allUserRoles?.filter((u) => !u.is_approved) ?? [];
+  const approvedUsers = allUserRoles?.filter((u) => u.is_approved) ?? [];
+
+  const approveUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase.from("profiles").update({ is_approved: true } as any).eq("user_id", userId);
+      if (error) throw error;
+      await logAudit("approve_user", "user", userId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-user-roles"] });
+      toast({ title: "User approved successfully" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const rejectUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      await logAudit("reject_user", "user", userId);
+      // Delete the user entirely
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ action: "delete", userId }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to reject user");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-user-roles"] });
+      toast({ title: "User rejected and removed" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const addRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
       if (!orgId) throw new Error("No org");
       const { error } = await supabase.from("user_roles").insert({ user_id: userId, role, organization_id: orgId });
       if (error) throw error;
+      await logAudit("assign_role", "user", userId, { role });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["all-user-roles"] }); toast({ title: "Role added" }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const removeRole = useMutation({
-    mutationFn: async (roleId: string) => {
+    mutationFn: async ({ roleId, userId, role }: { roleId: string; userId: string; role: string }) => {
       const { error } = await supabase.from("user_roles").delete().eq("id", roleId);
       if (error) throw error;
+      await logAudit("remove_role", "user", userId, { role });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["all-user-roles"] }); toast({ title: "Role removed" }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -91,11 +136,12 @@ const SettingsPage = () => {
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to create user");
+      await logAudit("create", "user", result.user?.id, { email: newUserEmail, role: newUserRole });
       return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all-user-roles"] });
-      toast({ title: "User created successfully" });
+      toast({ title: "User created — pending your approval" });
       setShowCreateUser(false);
       setNewUserEmail(""); setNewUserName(""); setNewUserRole("worker"); setNewUserPassword("");
     },
@@ -112,6 +158,7 @@ const SettingsPage = () => {
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to delete user");
+      await logAudit("delete", "user", userId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all-user-roles"] });
@@ -161,6 +208,42 @@ const SettingsPage = () => {
 
         {isOwner && (
           <>
+            {/* Pending Approvals */}
+            {pendingUsers.length > 0 && (
+              <div className="bg-card rounded-xl p-6 card-shadow border-2 border-warning/30">
+                <div className="flex items-center gap-2 mb-4">
+                  <Clock className="w-5 h-5 text-warning" />
+                  <h3 className="font-serif text-lg">Pending Approvals ({pendingUsers.length})</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">
+                  These users have been created but need your approval to access the system.
+                </p>
+                <div className="space-y-3">
+                  {pendingUsers.map((u) => (
+                    <div key={u.user_id} className="border border-warning/20 bg-warning/5 rounded-lg p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{u.name}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                        <div className="flex gap-1 mt-1">
+                          {u.roles.map((r) => (
+                            <span key={r.id} className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium capitalize">{r.role}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => approveUser.mutate(u.user_id)} className="gap-1.5" disabled={approveUser.isPending}>
+                          <CheckCircle className="w-3.5 h-3.5" /> Approve
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => { if (confirm(`Reject and remove ${u.name}?`)) rejectUser.mutate(u.user_id); }} className="gap-1.5" disabled={rejectUser.isPending}>
+                          <XCircle className="w-3.5 h-3.5" /> Reject
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* User Management */}
             <div className="bg-card rounded-xl p-6 card-shadow border border-border/50">
               <div className="flex items-center justify-between mb-4">
@@ -173,19 +256,22 @@ const SettingsPage = () => {
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                Create, delete, and manage roles for users in your organization.
+                Create users and manage roles. New users require your approval before they can access the system.
               </p>
 
               {rolesLoading ? (
                 <p className="text-sm text-muted-foreground">Loading users...</p>
               ) : (
                 <div className="space-y-3">
-                  {(allUserRoles ?? []).map((u) => (
+                  {approvedUsers.map((u) => (
                     <div key={u.user_id} className="border border-border/50 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{u.name}</p>
-                          <p className="text-xs text-muted-foreground">{u.email}</p>
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{u.name}</p>
+                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                          </div>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-semibold uppercase">Approved</span>
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => setAddingRoleFor(addingRoleFor === u.user_id ? null : u.user_id)} className="text-xs px-3 py-1.5 bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors">
@@ -203,7 +289,7 @@ const SettingsPage = () => {
                           <span key={r.id} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${r.role === "owner" ? "bg-primary/15 text-primary" : r.role === "manager" ? "bg-accent/50 text-foreground" : "bg-muted/50 text-muted-foreground"}`}>
                             {r.role}
                             {u.user_id !== user?.id && (
-                              <button onClick={() => removeRole.mutate(r.id)} className="hover:text-destructive transition-colors ml-0.5" title="Remove role">
+                              <button onClick={() => removeRole.mutate({ roleId: r.id, userId: u.user_id, role: r.role })} className="hover:text-destructive transition-colors ml-0.5" title="Remove role">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             )}
@@ -249,6 +335,9 @@ const SettingsPage = () => {
                     <Label>Password (optional)</Label>
                     <Input type="password" placeholder="Auto-generated if empty" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} />
                   </div>
+                  <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+                    💡 The user will be created with a <strong>Pending</strong> status. You'll need to approve them from this page before they can access the system.
+                  </p>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setShowCreateUser(false)}>Cancel</Button>

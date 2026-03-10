@@ -33,6 +33,7 @@ const ROUTE_PERMISSIONS: Record<string, AppRole[]> = {
   "/payroll": ["owner", "manager"],
   "/inventory": ["owner", "manager"],
   "/reports": ["owner", "manager", "supervisor"],
+  "/audit-log": ["owner"],
   "/settings": ["owner"],
 };
 

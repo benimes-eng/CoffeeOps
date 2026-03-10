@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, MapPin, Grid3X3, Warehouse, Users, DollarSign, Wrench, BarChart3, Settings,
-  ChevronLeft, Coffee, Menu, LogOut, Bell, Truck, Shield,
+  ChevronLeft, Coffee, Menu, LogOut, Bell, Truck, Shield, ClipboardList,
 } from "lucide-react";
 
 const navItems = [
@@ -20,6 +20,7 @@ const navItems = [
   { title: "Payroll", path: "/payroll", icon: DollarSign },
   { title: "Inventory & Machinery", path: "/inventory", icon: Wrench },
   { title: "Reports", path: "/reports", icon: BarChart3 },
+  { title: "Audit Log", path: "/audit-log", icon: ClipboardList },
   { title: "Settings", path: "/settings", icon: Settings },
 ];
 
