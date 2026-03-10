@@ -140,11 +140,7 @@ const SettingsPage = () => {
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Currency</label>
-              <select className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                <option>KES - Kenyan Shilling</option>
-                <option>USD - US Dollar</option>
-                <option>EUR - Euro</option>
-              </select>
+              <input type="text" value="ETB - Ethiopian Birr" className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" readOnly />
             </div>
           </div>
         </div>

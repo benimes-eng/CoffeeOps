@@ -105,7 +105,7 @@ const PayrollPage = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <MetricCard title="Total Wages" value={`KES ${totalWages.toLocaleString()}`} icon={<DollarSign className="w-4 h-4" />} />
+        <MetricCard title="Total Wages" value={`ETB ${totalWages.toLocaleString()}`} icon={<DollarSign className="w-4 h-4" />} />
         <MetricCard title="Entries" value={payrolls?.length || 0} />
         <MetricCard title="Pending Approval" value={pending} />
       </div>
@@ -118,7 +118,7 @@ const PayrollPage = () => {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Worker</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Period</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Hours</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pay (KES)</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pay (ETB)</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Approved</th>
               </tr>
             </thead>
@@ -187,7 +187,7 @@ const PayrollPage = () => {
                 <Input type="number" value={totalHours} onChange={(e) => setTotalHours(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Total Pay (KES)</Label>
+                <Label>Total Pay (ETB)</Label>
                 <Input type="number" value={totalPay} onChange={(e) => setTotalPay(e.target.value)} />
               </div>
             </div>
