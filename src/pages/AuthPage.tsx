@@ -61,7 +61,7 @@ const AuthPage = () => {
               <>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Organization / Farm Name</label>
-                  <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. Yirgacheffe Coffee Farm" /> />
+                  <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. Yirgacheffe Coffee Farm" />
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Full Name</label>
