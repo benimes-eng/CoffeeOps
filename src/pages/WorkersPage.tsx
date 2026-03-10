@@ -98,9 +98,11 @@ const WorkersPage = () => {
           <h1 className="text-3xl font-serif text-foreground">Workers</h1>
           <p className="text-muted-foreground mt-1">Manage farm workers</p>
         </div>
-        <Button onClick={() => setShowAdd(true)} className="gap-2">
-          <Plus className="w-4 h-4" /> Add Worker
-        </Button>
+        {canManage && (
+          <Button onClick={() => setShowAdd(true)} className="gap-2">
+            <Plus className="w-4 h-4" /> Add Worker
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
