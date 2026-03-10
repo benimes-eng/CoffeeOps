@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bed_activity_logs: {
         Row: {
           action_type: Database["public"]["Enums"]["bed_action_type"]
@@ -543,6 +584,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          is_approved: boolean
           name: string
           organization_id: string
           site_id: string | null
@@ -553,6 +595,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_approved?: boolean
           name: string
           organization_id: string
           site_id?: string | null
@@ -563,6 +606,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_approved?: boolean
           name?: string
           organization_id?: string
           site_id?: string | null
