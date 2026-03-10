@@ -183,9 +183,11 @@ const SitesPage = () => {
           <h1 className="text-3xl font-serif text-foreground">Sites & Fields</h1>
           <p className="text-muted-foreground mt-1">Manage farm sites, blocks, and beds</p>
         </div>
-        <Button onClick={() => setShowNewSite(true)} className="gap-2">
-          <Plus className="w-4 h-4" /> New Site
-        </Button>
+        {isOwner && (
+          <Button onClick={() => setShowNewSite(true)} className="gap-2">
+            <Plus className="w-4 h-4" /> New Site
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
