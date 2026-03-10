@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/hooks/use-auth";
+import { useRole } from "@/hooks/use-role";
 import Dashboard from "./pages/Dashboard";
 import SitesPage from "./pages/SitesPage";
 import BedManagement from "./pages/BedManagement";
@@ -18,8 +19,27 @@ import GrindingPage from "./pages/GrindingPage";
 import ShipmentPage from "./pages/ShipmentPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
+import UnauthorizedPage from "./pages/UnauthorizedPage";
 
 const queryClient = new QueryClient();
+
+function RoleGuard({ path, children }: { path: string; children: React.ReactNode }) {
+  const { canAccessRoute, isLoading } = useRole();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <p className="text-muted-foreground">Loading permissions...</p>
+      </div>
+    );
+  }
+
+  if (!canAccessRoute(path)) {
+    return <UnauthorizedPage />;
+  }
+
+  return <>{children}</>;
+}
 
 function ProtectedRoutes() {
   const { session, loading } = useAuth();
@@ -39,17 +59,17 @@ function ProtectedRoutes() {
   return (
     <AppLayout>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/sites" element={<SitesPage />} />
-        <Route path="/beds" element={<BedManagement />} />
-        <Route path="/warehouse" element={<WarehousePage />} />
-        <Route path="/workers" element={<WorkersPage />} />
-        <Route path="/payroll" element={<PayrollPage />} />
-        <Route path="/inventory" element={<InventoryPage />} />
-        <Route path="/grinding" element={<GrindingPage />} />
-        <Route path="/shipments" element={<ShipmentPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/" element={<RoleGuard path="/"><Dashboard /></RoleGuard>} />
+        <Route path="/sites" element={<RoleGuard path="/sites"><SitesPage /></RoleGuard>} />
+        <Route path="/beds" element={<RoleGuard path="/beds"><BedManagement /></RoleGuard>} />
+        <Route path="/warehouse" element={<RoleGuard path="/warehouse"><WarehousePage /></RoleGuard>} />
+        <Route path="/workers" element={<RoleGuard path="/workers"><WorkersPage /></RoleGuard>} />
+        <Route path="/payroll" element={<RoleGuard path="/payroll"><PayrollPage /></RoleGuard>} />
+        <Route path="/inventory" element={<RoleGuard path="/inventory"><InventoryPage /></RoleGuard>} />
+        <Route path="/grinding" element={<RoleGuard path="/grinding"><GrindingPage /></RoleGuard>} />
+        <Route path="/shipments" element={<RoleGuard path="/shipments"><ShipmentPage /></RoleGuard>} />
+        <Route path="/reports" element={<RoleGuard path="/reports"><ReportsPage /></RoleGuard>} />
+        <Route path="/settings" element={<RoleGuard path="/settings"><SettingsPage /></RoleGuard>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>
