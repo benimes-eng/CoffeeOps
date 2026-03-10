@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/hooks/use-org";
+import { useRole } from "@/hooks/use-role";
 import { Constants } from "@/integrations/supabase/types";
 
 const statusBadge: Record<string, string> = {
