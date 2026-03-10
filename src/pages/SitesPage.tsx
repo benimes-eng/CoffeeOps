@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/hooks/use-org";
+import { useRole } from "@/hooks/use-role";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Site = Tables<"sites">;
