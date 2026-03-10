@@ -258,14 +258,16 @@ const SitesPage = () => {
                               {block.beds.map((bed: any) => (
                                 <div key={bed.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2 text-sm group/bed">
                                   <span className="font-mono text-xs">{bed.bed_number}</span>
-                                  <div className="hidden group-hover/bed:flex gap-1">
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setShowEditBed(bed); setEditBedLength(String(bed.length)); setEditBedWidth(String(bed.width)); setEditBedMaterial(bed.material_type || ""); }}>
-                                      <Pencil className="w-3 h-3" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setShowDeleteBed(bed)}>
-                                      <Trash2 className="w-3 h-3" />
-                                    </Button>
-                                  </div>
+                                  {isOwner && (
+                                    <div className="hidden group-hover/bed:flex gap-1">
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setShowEditBed(bed); setEditBedLength(String(bed.length)); setEditBedWidth(String(bed.width)); setEditBedMaterial(bed.material_type || ""); }}>
+                                        <Pencil className="w-3 h-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setShowDeleteBed(bed)}>
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
