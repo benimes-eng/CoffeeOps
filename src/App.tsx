@@ -20,6 +20,7 @@ import SettingsPage from "./pages/SettingsPage";
 import GrindingPage from "./pages/GrindingPage";
 import ShipmentPage from "./pages/ShipmentPage";
 import AuditLogPage from "./pages/AuditLogPage";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
@@ -45,23 +46,27 @@ function RoleGuard({ path, children }: { path: string; children: React.ReactNode
   return <>{children}</>;
 }
 
-function ProtectedRoutes() {
-  const { session, loading, user } = useAuth();
-
-  const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ["my-profile-approval", user?.id],
+function useProfileData() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["my-profile-full", user?.id],
     queryFn: async () => {
       if (!user) return null;
       const { data, error } = await supabase
         .from("profiles")
-        .select("is_approved")
+        .select("is_approved, is_super_admin")
         .eq("user_id", user.id)
         .single();
       if (error) throw error;
-      return data;
+      return data as any as { is_approved: boolean; is_super_admin: boolean };
     },
     enabled: !!user,
   });
+}
+
+function ProtectedRoutes() {
+  const { session, loading } = useAuth();
+  const { data: profile, isLoading: profileLoading } = useProfileData();
 
   if (loading || profileLoading) {
     return (
@@ -75,8 +80,13 @@ function ProtectedRoutes() {
     return <Navigate to="/auth" replace />;
   }
 
+  // Super admin gets their own dashboard
+  if (profile?.is_super_admin) {
+    return <SuperAdminDashboard />;
+  }
+
   // Gate unapproved users
-  if (profile && !(profile as any).is_approved) {
+  if (profile && !profile.is_approved) {
     return <PendingApprovalPage />;
   }
 

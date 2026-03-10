@@ -14,7 +14,7 @@ const PendingApprovalPage = () => {
         <div>
           <h1 className="text-2xl font-serif text-foreground">Account Pending Approval</h1>
           <p className="text-muted-foreground mt-3 leading-relaxed">
-            Your account <span className="font-medium text-foreground">{user?.email}</span> has been created and is awaiting approval from the farm owner/admin. You'll have full access once approved.
+            Your account <span className="font-medium text-foreground">{user?.email}</span> has been created and is awaiting approval from the platform administrator. You'll receive full access once your account is approved.
           </p>
         </div>
         <Button variant="outline" onClick={signOut} className="gap-2">
