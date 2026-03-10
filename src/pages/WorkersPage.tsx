@@ -23,6 +23,8 @@ const WorkersPage = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useOrg();
+  const { hasMinRole } = useRole();
+  const canManage = hasMinRole("manager");
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
