@@ -145,9 +145,11 @@ const WorkersPage = () => {
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
+                      {canManage && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))
