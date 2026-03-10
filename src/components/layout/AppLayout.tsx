@@ -20,6 +20,7 @@ const navItems = [
   { title: "Payroll", path: "/payroll", icon: DollarSign },
   { title: "Inventory & Machinery", path: "/inventory", icon: Wrench },
   { title: "Reports", path: "/reports", icon: BarChart3 },
+  { title: "Audit Log", path: "/audit-log", icon: ClipboardList },
   { title: "Settings", path: "/settings", icon: Settings },
 ];
 
