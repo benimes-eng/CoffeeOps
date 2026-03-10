@@ -181,7 +181,7 @@ const WorkersPage = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Rate (KES)</Label>
+                <Label>Rate (ETB)</Label>
                 <Input type="number" placeholder="0" value={wageRate} onChange={(e) => setWageRate(e.target.value)} />
               </div>
             </div>

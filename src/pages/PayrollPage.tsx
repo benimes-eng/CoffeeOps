@@ -187,7 +187,7 @@ const PayrollPage = () => {
                 <Input type="number" value={totalHours} onChange={(e) => setTotalHours(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Total Pay (KES)</Label>
+                <Label>Total Pay (ETB)</Label>
                 <Input type="number" value={totalPay} onChange={(e) => setTotalPay(e.target.value)} />
               </div>
             </div>
