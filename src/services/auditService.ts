@@ -31,7 +31,7 @@ export async function logAudit(
 
     if (!profile) return;
 
-    await supabase.from("audit_logs").insert({
+    await (supabase.from("audit_logs") as any).insert({
       user_id: user.id,
       organization_id: profile.organization_id,
       action,
