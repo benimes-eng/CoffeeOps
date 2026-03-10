@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/hooks/use-org";
+import { useRole } from "@/hooks/use-role";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Site = Tables<"sites">;
@@ -18,6 +19,7 @@ const SitesPage = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useOrg();
+  const { isOwner } = useRole();
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
 
   // Dialogs
@@ -181,9 +183,11 @@ const SitesPage = () => {
           <h1 className="text-3xl font-serif text-foreground">Sites & Fields</h1>
           <p className="text-muted-foreground mt-1">Manage farm sites, blocks, and beds</p>
         </div>
-        <Button onClick={() => setShowNewSite(true)} className="gap-2">
-          <Plus className="w-4 h-4" /> New Site
-        </Button>
+        {isOwner && (
+          <Button onClick={() => setShowNewSite(true)} className="gap-2">
+            <Plus className="w-4 h-4" /> New Site
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -202,14 +206,16 @@ const SitesPage = () => {
                   </div>
                 </div>
               </button>
-              <div className="absolute top-3 right-3 hidden group-hover:flex gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setShowEditSite(site); setNewSiteName(site.name); setNewSiteLocation(site.location || ""); }}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setShowDeleteSite(site)}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
+              {isOwner && (
+                <div className="absolute top-3 right-3 hidden group-hover:flex gap-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setShowEditSite(site); setNewSiteName(site.name); setNewSiteLocation(site.location || ""); }}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setShowDeleteSite(site)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
             </div>
           )) : (
             <p className="text-sm text-muted-foreground py-4 text-center">No sites yet. Create one to get started.</p>
@@ -252,14 +258,16 @@ const SitesPage = () => {
                               {block.beds.map((bed: any) => (
                                 <div key={bed.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2 text-sm group/bed">
                                   <span className="font-mono text-xs">{bed.bed_number}</span>
-                                  <div className="hidden group-hover/bed:flex gap-1">
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setShowEditBed(bed); setEditBedLength(String(bed.length)); setEditBedWidth(String(bed.width)); setEditBedMaterial(bed.material_type || ""); }}>
-                                      <Pencil className="w-3 h-3" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setShowDeleteBed(bed)}>
-                                      <Trash2 className="w-3 h-3" />
-                                    </Button>
-                                  </div>
+                                  {isOwner && (
+                                    <div className="hidden group-hover/bed:flex gap-1">
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setShowEditBed(bed); setEditBedLength(String(bed.length)); setEditBedWidth(String(bed.width)); setEditBedMaterial(bed.material_type || ""); }}>
+                                        <Pencil className="w-3 h-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setShowDeleteBed(bed)}>
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>

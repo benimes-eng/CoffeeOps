@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/hooks/use-org";
+import { useRole } from "@/hooks/use-role";
 import { Constants } from "@/integrations/supabase/types";
 
 const statusBadge: Record<string, string> = {
@@ -22,6 +23,8 @@ const WorkersPage = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useOrg();
+  const { hasMinRole } = useRole();
+  const canManage = hasMinRole("manager");
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -95,9 +98,11 @@ const WorkersPage = () => {
           <h1 className="text-3xl font-serif text-foreground">Workers</h1>
           <p className="text-muted-foreground mt-1">Manage farm workers</p>
         </div>
-        <Button onClick={() => setShowAdd(true)} className="gap-2">
-          <Plus className="w-4 h-4" /> Add Worker
-        </Button>
+        {canManage && (
+          <Button onClick={() => setShowAdd(true)} className="gap-2">
+            <Plus className="w-4 h-4" /> Add Worker
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -140,9 +145,11 @@ const WorkersPage = () => {
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
+                      {canManage && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
+import { useRole, ROLE_LABELS } from "@/hooks/use-role";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, MapPin, Grid3X3, Warehouse, Users, DollarSign, Wrench, BarChart3, Settings,
-  ChevronLeft, Coffee, Menu, LogOut, Bell, Truck,
+  ChevronLeft, Coffee, Menu, LogOut, Bell, Truck, Shield,
 } from "lucide-react";
 
 const navItems = [
@@ -24,6 +25,9 @@ const navItems = [
 
 export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const location = useLocation();
+  const { canAccessRoute } = useRole();
+
+  const filteredNav = navItems.filter((item) => canAccessRoute(item.path));
 
   return (
     <aside className={`fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-40 transition-all duration-300 flex flex-col ${collapsed ? "w-[68px]" : "w-60"}`}>
@@ -39,7 +43,7 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
         )}
       </div>
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
+        {filteredNav.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link key={item.path} to={item.path} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"}`}>
@@ -147,8 +151,16 @@ function NotificationBell() {
   );
 }
 
+const roleBadgeColor: Record<string, string> = {
+  owner: "bg-primary/15 text-primary",
+  manager: "bg-accent text-accent-foreground",
+  supervisor: "bg-warning/15 text-warning",
+  worker: "bg-muted text-muted-foreground",
+};
+
 export function AppHeader({ sidebarCollapsed, onToggleSidebar }: { sidebarCollapsed: boolean; onToggleSidebar: () => void }) {
   const { user, signOut } = useAuth();
+  const { highestRole } = useRole();
   const initials = user?.email?.slice(0, 2).toUpperCase() || "U";
 
   return (
@@ -163,6 +175,12 @@ export function AppHeader({ sidebarCollapsed, onToggleSidebar }: { sidebarCollap
       </div>
       <div className="flex items-center gap-2">
         <NotificationBell />
+        {highestRole && (
+          <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full font-semibold uppercase tracking-wide ${roleBadgeColor[highestRole] || "bg-muted text-muted-foreground"}`}>
+            <Shield className="w-3 h-3" />
+            {ROLE_LABELS[highestRole]}
+          </span>
+        )}
         <span className="text-sm text-muted-foreground hidden sm:block">{user?.email}</span>
         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
           <span className="text-xs font-bold text-primary-foreground">{initials}</span>
