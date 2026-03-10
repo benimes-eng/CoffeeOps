@@ -206,14 +206,16 @@ const SitesPage = () => {
                   </div>
                 </div>
               </button>
-              <div className="absolute top-3 right-3 hidden group-hover:flex gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setShowEditSite(site); setNewSiteName(site.name); setNewSiteLocation(site.location || ""); }}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setShowDeleteSite(site)}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
+              {isOwner && (
+                <div className="absolute top-3 right-3 hidden group-hover:flex gap-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setShowEditSite(site); setNewSiteName(site.name); setNewSiteLocation(site.location || ""); }}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setShowDeleteSite(site)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
             </div>
           )) : (
             <p className="text-sm text-muted-foreground py-4 text-center">No sites yet. Create one to get started.</p>
