@@ -19,6 +19,7 @@ const SitesPage = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useOrg();
+  const { isOwner } = useRole();
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
 
   // Dialogs
