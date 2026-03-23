@@ -120,7 +120,6 @@ const SuperAdminDashboard = () => {
   const rejectUser = useMutation({
     mutationFn: async (userId: string) => {
       await logAudit("reject_user", "user", userId);
-      // Delete profile and roles — user can no longer access
       await supabase.from("user_roles").delete().eq("user_id", userId);
       const { error } = await supabase.from("profiles").delete().eq("user_id", userId) as any;
       if (error) throw error;
@@ -128,6 +127,23 @@ const SuperAdminDashboard = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super-admin-users"] });
       toast({ title: "User rejected and removed" });
+      setConfirmAction(null);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const suspendUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_approved: false } as any)
+        .eq("user_id", userId);
+      if (error) throw error;
+      await logAudit("suspend_user", "user", userId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["super-admin-users"] });
+      toast({ title: "Account suspended successfully" });
       setConfirmAction(null);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
