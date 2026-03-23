@@ -416,11 +416,16 @@ const SuperAdminDashboard = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="font-serif">
-              {confirmAction?.type === "approve" ? "Approve User" : "Reject User"}
+              {confirmAction?.type === "approve" ? "Approve User" :
+               confirmAction?.type === "suspend" ? "Suspend Account" :
+               confirmAction?.type === "reactivate" ? "Reactivate Account" :
+               "Reject User"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction?.type === "approve"
                 ? `Approve ${confirmAction.user.name} (${confirmAction.user.email}) from ${confirmAction.user.org_name}? They will gain full access to their organization.`
+                : confirmAction?.type === "suspend"
+                ? `Suspend ${confirmAction.user.name} (${confirmAction.user.email})? They will be locked out of their account until reactivated.`
                 : `Reject and remove ${confirmAction?.user.name} (${confirmAction?.user.email})? This will delete their account and organization.`
               }
             </AlertDialogDescription>
@@ -433,11 +438,15 @@ const SuperAdminDashboard = () => {
                   approveUser.mutate(confirmAction.user.user_id);
                 } else if (confirmAction?.type === "reject") {
                   rejectUser.mutate(confirmAction!.user.user_id);
+                } else if (confirmAction?.type === "suspend") {
+                  suspendUser.mutate(confirmAction!.user.user_id);
                 }
               }}
-              className={confirmAction?.type === "reject" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              className={confirmAction?.type === "reject" || confirmAction?.type === "suspend" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
             >
-              {confirmAction?.type === "approve" ? "Approve" : "Reject & Remove"}
+              {confirmAction?.type === "approve" ? "Approve" :
+               confirmAction?.type === "suspend" ? "Suspend Account" :
+               "Reject & Remove"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
