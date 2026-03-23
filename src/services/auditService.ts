@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type AuditAction =
   | "create" | "update" | "delete"
-  | "approve_user" | "reject_user"
+  | "approve_user" | "reject_user" | "suspend_user"
   | "assign_role" | "remove_role"
   | "mark_complete" | "start_grinding" | "complete_grinding"
   | "create_shipment" | "confirm_shipment"
