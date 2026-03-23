@@ -36,7 +36,7 @@ const SuperAdminDashboard = () => {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"pending" | "approved" | "all" | "audit">("pending");
-  const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "reject"; user: UserWithOrg } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "reject" | "suspend" | "reactivate"; user: UserWithOrg } | null>(null);
 
   // Fetch all profiles, orgs, roles
   const { data: allUsers, isLoading } = useQuery({
@@ -120,7 +120,6 @@ const SuperAdminDashboard = () => {
   const rejectUser = useMutation({
     mutationFn: async (userId: string) => {
       await logAudit("reject_user", "user", userId);
-      // Delete profile and roles — user can no longer access
       await supabase.from("user_roles").delete().eq("user_id", userId);
       const { error } = await supabase.from("profiles").delete().eq("user_id", userId) as any;
       if (error) throw error;
@@ -128,6 +127,23 @@ const SuperAdminDashboard = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super-admin-users"] });
       toast({ title: "User rejected and removed" });
+      setConfirmAction(null);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const suspendUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_approved: false } as any)
+        .eq("user_id", userId);
+      if (error) throw error;
+      await logAudit("suspend_user", "user", userId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["super-admin-users"] });
+      toast({ title: "Account suspended successfully" });
       setConfirmAction(null);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -154,6 +170,7 @@ const SuperAdminDashboard = () => {
     reject_user: { label: "Rejected", color: "bg-destructive/10 text-destructive" },
     assign_role: { label: "Role Assigned", color: "bg-primary/10 text-primary" },
     remove_role: { label: "Role Removed", color: "bg-warning/10 text-warning" },
+    suspend_user: { label: "Suspended", color: "bg-destructive/10 text-destructive" },
   };
 
   return (
@@ -366,7 +383,7 @@ const SuperAdminDashboard = () => {
                                 {format(new Date(u.created_at), "MMM d, yyyy")}
                               </td>
                               <td className="px-5 py-3.5">
-                                {!u.is_approved && (
+                                {!u.is_approved ? (
                                   <div className="flex gap-2">
                                     <Button size="sm" onClick={() => setConfirmAction({ type: "approve", user: u })} className="gap-1 h-7 text-xs">
                                       <CheckCircle className="w-3 h-3" /> Approve
@@ -375,6 +392,10 @@ const SuperAdminDashboard = () => {
                                       <XCircle className="w-3 h-3" /> Reject
                                     </Button>
                                   </div>
+                                ) : (
+                                  <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: "suspend", user: u })} className="gap-1 h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10">
+                                    <XCircle className="w-3 h-3" /> Suspend
+                                  </Button>
                                 )}
                               </td>
                             </tr>
@@ -395,11 +416,16 @@ const SuperAdminDashboard = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="font-serif">
-              {confirmAction?.type === "approve" ? "Approve User" : "Reject User"}
+              {confirmAction?.type === "approve" ? "Approve User" :
+               confirmAction?.type === "suspend" ? "Suspend Account" :
+               confirmAction?.type === "reactivate" ? "Reactivate Account" :
+               "Reject User"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction?.type === "approve"
                 ? `Approve ${confirmAction.user.name} (${confirmAction.user.email}) from ${confirmAction.user.org_name}? They will gain full access to their organization.`
+                : confirmAction?.type === "suspend"
+                ? `Suspend ${confirmAction.user.name} (${confirmAction.user.email})? They will be locked out of their account until reactivated.`
                 : `Reject and remove ${confirmAction?.user.name} (${confirmAction?.user.email})? This will delete their account and organization.`
               }
             </AlertDialogDescription>
@@ -412,11 +438,15 @@ const SuperAdminDashboard = () => {
                   approveUser.mutate(confirmAction.user.user_id);
                 } else if (confirmAction?.type === "reject") {
                   rejectUser.mutate(confirmAction!.user.user_id);
+                } else if (confirmAction?.type === "suspend") {
+                  suspendUser.mutate(confirmAction!.user.user_id);
                 }
               }}
-              className={confirmAction?.type === "reject" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              className={confirmAction?.type === "reject" || confirmAction?.type === "suspend" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
             >
-              {confirmAction?.type === "approve" ? "Approve" : "Reject & Remove"}
+              {confirmAction?.type === "approve" ? "Approve" :
+               confirmAction?.type === "suspend" ? "Suspend Account" :
+               "Reject & Remove"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
