@@ -36,7 +36,7 @@ const SuperAdminDashboard = () => {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"pending" | "approved" | "all" | "audit">("pending");
-  const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "reject"; user: UserWithOrg } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "reject" | "suspend" | "reactivate"; user: UserWithOrg } | null>(null);
 
   // Fetch all profiles, orgs, roles
   const { data: allUsers, isLoading } = useQuery({
