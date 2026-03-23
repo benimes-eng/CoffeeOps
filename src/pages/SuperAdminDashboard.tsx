@@ -383,7 +383,7 @@ const SuperAdminDashboard = () => {
                                 {format(new Date(u.created_at), "MMM d, yyyy")}
                               </td>
                               <td className="px-5 py-3.5">
-                                {!u.is_approved && (
+                                {!u.is_approved ? (
                                   <div className="flex gap-2">
                                     <Button size="sm" onClick={() => setConfirmAction({ type: "approve", user: u })} className="gap-1 h-7 text-xs">
                                       <CheckCircle className="w-3 h-3" /> Approve
@@ -392,6 +392,10 @@ const SuperAdminDashboard = () => {
                                       <XCircle className="w-3 h-3" /> Reject
                                     </Button>
                                   </div>
+                                ) : (
+                                  <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: "suspend", user: u })} className="gap-1 h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10">
+                                    <XCircle className="w-3 h-3" /> Suspend
+                                  </Button>
                                 )}
                               </td>
                             </tr>
