@@ -170,6 +170,7 @@ const SuperAdminDashboard = () => {
     reject_user: { label: "Rejected", color: "bg-destructive/10 text-destructive" },
     assign_role: { label: "Role Assigned", color: "bg-primary/10 text-primary" },
     remove_role: { label: "Role Removed", color: "bg-warning/10 text-warning" },
+    suspend_user: { label: "Suspended", color: "bg-destructive/10 text-destructive" },
   };
 
   return (
