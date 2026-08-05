@@ -31,13 +31,14 @@ const AuthPage = () => {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate("/");
+        if (next) window.location.href = next;
+        else navigate("/");
       } else {
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: window.location.origin + (next ?? ""),
             data: { name, org_name: orgName.trim() || undefined },
           },
         });
