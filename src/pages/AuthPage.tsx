@@ -99,7 +99,7 @@ const AuthPage = () => {
           <button type="button" onClick={async () => {
             setLoading(true);
             try {
-              const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/auth" });
+              const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + (next ?? "/auth") });
               if (result.error) throw result.error;
             } catch (error: any) {
               toast({ title: "Error", description: error.message, variant: "destructive" });
