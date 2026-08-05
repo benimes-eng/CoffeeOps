@@ -25,6 +25,7 @@ import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
 import PendingApprovalPage from "./pages/PendingApprovalPage";
+import OAuthConsent from "./pages/OAuthConsent";
 
 const queryClient = new QueryClient();
 
@@ -136,6 +137,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
           <Route path="/auth" element={<AuthRoute />} />
           <Route path="/*" element={<ProtectedRoutes />} />
         </Routes>
