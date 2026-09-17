@@ -59,6 +59,10 @@ BEGIN
     RAISE EXCEPTION 'UNAUTHORIZED: Invalid bootstrap secret key';
   END IF;
 
+  -- Permit the profile protection trigger to perform this one guarded
+  -- elevation within the current bootstrap transaction only.
+  PERFORM set_config('coffeeops.bootstrap_super_admin', 'true', true);
+
   -- Confirm email
   UPDATE auth.users
   SET email_confirmed_at = now()

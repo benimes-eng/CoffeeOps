@@ -368,6 +368,10 @@ USING (
 -- ─────────────────────────────────────────────────────────────
 
 -- 5.1 Authoritative Lot Intake (Cherry or Direct Dried Coffee)
+-- Replace the legacy four-argument overload created by the preceding
+-- hardening migration before introducing this five-argument version.
+DROP FUNCTION IF EXISTS public.fn_create_lot(TEXT, NUMERIC, DATE, TEXT);
+
 CREATE OR REPLACE FUNCTION public.fn_create_lot(
   p_region TEXT,
   p_initial_weight NUMERIC,
@@ -1439,8 +1443,8 @@ GRANT EXECUTE ON FUNCTION public.assert_active_tenant_actor TO authenticated, se
 REVOKE ALL ON FUNCTION public.next_document_number FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.next_document_number TO authenticated, service_role;
 
-REVOKE ALL ON FUNCTION public.fn_create_lot FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.fn_create_lot TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.fn_create_lot(TEXT, NUMERIC, DATE, TEXT, BOOLEAN) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fn_create_lot(TEXT, NUMERIC, DATE, TEXT, BOOLEAN) TO authenticated, service_role;
 
 REVOKE ALL ON FUNCTION public.fn_assign_bed FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_assign_bed TO authenticated, service_role;
