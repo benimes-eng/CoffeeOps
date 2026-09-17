@@ -100,7 +100,7 @@ BEGIN
   -- A transaction-local flag is set only by the guarded SECURITY DEFINER
   -- bootstrap procedure after it verifies its server-side bootstrap secret.
   IF NOT public.is_super_admin(auth.uid())
-     AND current_user != 'service_role'
+     AND COALESCE(auth.role(), '') <> 'service_role'
      AND current_setting('coffeeops.bootstrap_super_admin', true) IS DISTINCT FROM 'true' THEN
     IF NEW.is_super_admin IS DISTINCT FROM OLD.is_super_admin THEN
       RAISE EXCEPTION 'Unauthorized: Only platform administrators can modify is_super_admin';
