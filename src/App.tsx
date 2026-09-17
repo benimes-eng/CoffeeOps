@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useAuth } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,7 +32,16 @@ const UnauthorizedPage = lazy(() => import("./pages/UnauthorizedPage"));
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage"));
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,
+      gcTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function PageLoader() {
   return (
@@ -189,19 +198,21 @@ function AuthRoute() {
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-              <Route path="/auth" element={<AuthRoute />} />
-              <Route path="/*" element={<ProtectedRoutes />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+                <Route path="/auth" element={<AuthRoute />} />
+                <Route path="/*" element={<ProtectedRoutes />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   </ErrorBoundary>
 );

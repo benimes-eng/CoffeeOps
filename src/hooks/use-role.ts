@@ -51,31 +51,31 @@ export function useRole() {
     queryFn: async () => {
       if (!user) return [] as AppRole[];
 
-      // 1. Fetch assigned roles
-      const { data: roleRows, error: roleError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
+      const [rolesResult, profileResult] = await Promise.all([
+        supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id),
+        supabase
+          .from("profiles")
+          .select("is_super_admin")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
 
-      if (roleError) {
-        throw roleError;
+      if (rolesResult.error) {
+        throw rolesResult.error;
       }
 
-      // 2. Check platform super admin status
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_super_admin")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const rolesList: AppRole[] = (roleRows || []).map((r) => r.role);
-      if (profile?.is_super_admin && !rolesList.includes("super_admin")) {
+      const rolesList: AppRole[] = (rolesResult.data || []).map((r) => r.role);
+      if (profileResult.data?.is_super_admin && !rolesList.includes("super_admin")) {
         rolesList.push("super_admin");
       }
 
       return rolesList;
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const userRoles = roles ?? [];
