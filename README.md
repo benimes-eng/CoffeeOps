@@ -1,73 +1,37 @@
-# Welcome to your Lovable project
+# CoffeeOps
 
-## Project info
+CoffeeOps is a web application for managing coffee supply-chain operations: organisations, members, lots, shipments, quality controls, inventory and reporting.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Local development
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Requirements: Node.js 20–24 and npm 10 or later.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+npm ci
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Copy `.env.example` to `.env` and set the Supabase URL and publishable key. Never commit `.env` or any Supabase service-role key.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Useful checks:
 
-**Use GitHub Codespaces**
+```sh
+npm run lint
+npx tsc --noEmit
+npm run test
+npm run build
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Production release checklist
 
-## What technologies are used for this project?
+1. In Supabase Auth, set the production Site URL and allowed redirect URLs, enable email confirmation, and configure a real SMTP provider.
+2. Create the first administrator as a normal verified account, then promote that exact email with an audited, one-time database operation. CoffeeOps intentionally has no public bootstrap route or default administrator password.
+3. Deploy database migrations with `npx supabase db push --project-ref <project-ref>`.
+4. Set `ALLOWED_ORIGINS` on the `manage-users` Edge Function to the exact production origins, then deploy it with `npx supabase functions deploy manage-users --project-ref <project-ref>`.
+5. Build the application with `npm run build` and deploy the `dist` directory to Cloudflare Workers/Pages. The `_headers` file supplies browser security headers and asset caching.
+6. Verify sign-up, verified sign-in, administrator approvals, role changes, logout, and page loads in the deployed environment.
+7. Configure production monitoring, alerting, regular restore tests, and a backup/PITR policy in the services that host the application and database.
 
-This project is built with:
+## Security model
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+The browser uses only the Supabase publishable/anonymous key. Privileged account-management operations run through the `manage-users` Edge Function, which verifies the caller's user ID and super-admin role server-side. Row-level security remains the data-access boundary. Keep production origins explicit and never expose service-role credentials to the client.
