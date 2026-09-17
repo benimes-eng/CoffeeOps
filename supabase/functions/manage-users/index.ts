@@ -1,33 +1,48 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const baseCorsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function jsonResponse(data: Record<string, unknown>, status = 200) {
+function corsHeaders(req: Request) {
+  const origin = req.headers.get("Origin");
+  const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!origin || !allowedOrigins.includes(origin)) return null;
+  return { ...baseCorsHeaders, "Access-Control-Allow-Origin": origin, Vary: "Origin" };
+}
+
+function jsonResponse(data: Record<string, unknown>, headers: Record<string, string>, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...headers, "Content-Type": "application/json" },
   });
 }
 
-function errorResponse(message: string, status = 400) {
+function errorResponse(message: string, headers: Record<string, string>, status = 400) {
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...headers, "Content-Type": "application/json" },
   });
 }
 
 serve(async (req) => {
+  const headers = corsHeaders(req);
+  if (!headers) {
+    return new Response("Origin not allowed", { status: 403 });
+  }
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("Method not allowed", 405);
+    return errorResponse("Method not allowed", headers, 405);
   }
 
   try {
@@ -35,7 +50,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return errorResponse("Server configuration error", 500);
+      return errorResponse("Server configuration error", headers, 500);
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -45,13 +60,13 @@ serve(async (req) => {
     // 1. Verify caller from Bearer token
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return errorResponse("UNAUTHORIZED: Bearer token required", 401);
+      return errorResponse("UNAUTHORIZED: Bearer token required", headers, 401);
     }
 
     const token = authHeader.replace("Bearer ", "").trim();
     const { data: { user: caller }, error: authErr } = await supabaseAdmin.auth.getUser(token);
     if (authErr || !caller) {
-      return errorResponse("UNAUTHORIZED: Invalid or expired session", 401);
+      return errorResponse("UNAUTHORIZED: Invalid or expired session", headers, 401);
     }
 
     // 2. Fetch caller profile and permissions
@@ -62,7 +77,7 @@ serve(async (req) => {
       .single();
 
     if (profileErr || !callerProfile) {
-      return errorResponse("FORBIDDEN: Caller profile not found", 403);
+      return errorResponse("FORBIDDEN: Caller profile not found", headers, 403);
     }
 
     const isSuperAdmin = callerProfile.is_super_admin === true;
@@ -70,7 +85,7 @@ serve(async (req) => {
     const callerOrgId = callerProfile.organization_id;
 
     if (!isSuperAdmin && !isApproved) {
-      return errorResponse("FORBIDDEN: Caller account is not approved", 403);
+      return errorResponse("FORBIDDEN: Caller account is not approved", headers, 403);
     }
 
     // Check if caller is an owner of their organization
@@ -88,7 +103,7 @@ serve(async (req) => {
     }
 
     if (!isSuperAdmin && !isOwner) {
-      return errorResponse("FORBIDDEN: Only farm owners or platform super administrators can manage users", 403);
+      return errorResponse("FORBIDDEN: Only farm owners or platform super administrators can manage users", headers, 403);
     }
 
     // 3. Parse and dispatch action
@@ -96,7 +111,7 @@ serve(async (req) => {
     const { action } = body;
 
     if (!action || typeof action !== "string") {
-      return errorResponse("INVALID_ACTION: 'action' parameter is required");
+      return errorResponse("INVALID_ACTION: 'action' parameter is required", headers);
     }
 
     // Helper: log privileged action to audit_logs
@@ -120,7 +135,7 @@ serve(async (req) => {
       const { email, name, role = "worker", password, organizationId } = body;
 
       if (!email || typeof email !== "string" || !email.includes("@")) {
-        return errorResponse("VALIDATION_ERROR: Valid email address is required");
+        return errorResponse("VALIDATION_ERROR: Valid email address is required", headers);
       }
 
       // Target org determination
@@ -130,7 +145,7 @@ serve(async (req) => {
       }
 
       if (!targetOrgId) {
-        return errorResponse("VALIDATION_ERROR: Target organization is required");
+        return errorResponse("VALIDATION_ERROR: Target organization is required", headers);
       }
 
       const cleanEmail = email.trim().toLowerCase();
@@ -140,7 +155,7 @@ serve(async (req) => {
 
       // Non-super-admins cannot create super_admins or assign cross-tenant
       if (targetRole === "super_admin" && !isSuperAdmin) {
-        return errorResponse("FORBIDDEN: Cannot grant super administrator role");
+        return errorResponse("FORBIDDEN: Cannot grant super administrator role", headers);
       }
 
       const generatedPassword = (password && typeof password === "string" && password.length >= 8)
@@ -155,7 +170,7 @@ serve(async (req) => {
       });
 
       if (createErr) {
-        return errorResponse(createErr.message, 400);
+        return errorResponse(createErr.message, headers, 400);
       }
 
       // Ensure profile is created/updated
@@ -184,18 +199,18 @@ serve(async (req) => {
       return jsonResponse({
         success: true,
         user: { id: newUser.user.id, email: newUser.user.email, name: cleanName, role: targetRole },
-      });
+      }, headers);
     }
 
     // --- ACTION: DELETE ---
     if (action === "delete") {
       const { userId } = body;
       if (!userId || typeof userId !== "string") {
-        return errorResponse("VALIDATION_ERROR: 'userId' is required");
+        return errorResponse("VALIDATION_ERROR: 'userId' is required", headers);
       }
 
       if (userId === caller.id) {
-        return errorResponse("FORBIDDEN: You cannot delete your own account");
+        return errorResponse("FORBIDDEN: You cannot delete your own account", headers);
       }
 
       // Verify target user belongs to same org unless caller is super admin
@@ -206,15 +221,15 @@ serve(async (req) => {
         .single();
 
       if (!targetProfile) {
-        return errorResponse("NOT_FOUND: Target user not found", 404);
+        return errorResponse("NOT_FOUND: Target user not found", headers, 404);
       }
 
       if (targetProfile.is_super_admin && !isSuperAdmin) {
-        return errorResponse("FORBIDDEN: Cannot delete a platform administrator", 403);
+        return errorResponse("FORBIDDEN: Cannot delete a platform administrator", headers, 403);
       }
 
       if (!isSuperAdmin && targetProfile.organization_id !== callerOrgId) {
-        return errorResponse("FORBIDDEN: User does not belong to your organization", 403);
+        return errorResponse("FORBIDDEN: User does not belong to your organization", headers, 403);
       }
 
       // Clean up roles and profile first
@@ -223,19 +238,19 @@ serve(async (req) => {
 
       const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (delErr) {
-        return errorResponse(delErr.message, 400);
+        return errorResponse(delErr.message, headers, 400);
       }
 
       await logAudit("delete", "user", userId, { email: targetProfile.email });
 
-      return jsonResponse({ success: true, message: "User deleted successfully" });
+      return jsonResponse({ success: true, message: "User deleted successfully" }, headers);
     }
 
     // --- ACTION: APPROVE ---
     if (action === "approve") {
       const { userId } = body;
       if (!userId || typeof userId !== "string") {
-        return errorResponse("VALIDATION_ERROR: 'userId' is required");
+        return errorResponse("VALIDATION_ERROR: 'userId' is required", headers);
       }
 
       const { data: targetProfile } = await supabaseAdmin
@@ -245,11 +260,11 @@ serve(async (req) => {
         .single();
 
       if (!targetProfile) {
-        return errorResponse("NOT_FOUND: User profile not found", 404);
+        return errorResponse("NOT_FOUND: User profile not found", headers, 404);
       }
 
       if (!isSuperAdmin && targetProfile.organization_id !== callerOrgId) {
-        return errorResponse("FORBIDDEN: User does not belong to your organization", 403);
+        return errorResponse("FORBIDDEN: User does not belong to your organization", headers, 403);
       }
 
       const { error: updErr } = await supabaseAdmin
@@ -258,23 +273,23 @@ serve(async (req) => {
         .eq("user_id", userId);
 
       if (updErr) {
-        return errorResponse(updErr.message, 400);
+        return errorResponse(updErr.message, headers, 400);
       }
 
       await logAudit("approve_user", "user", userId, { email: targetProfile.email });
 
-      return jsonResponse({ success: true, message: "User approved successfully" });
+      return jsonResponse({ success: true, message: "User approved successfully" }, headers);
     }
 
     // --- ACTION: SUSPEND / UNSUSPEND ---
     if (action === "suspend") {
       const { userId, suspend = true } = body;
       if (!userId || typeof userId !== "string") {
-        return errorResponse("VALIDATION_ERROR: 'userId' is required");
+        return errorResponse("VALIDATION_ERROR: 'userId' is required", headers);
       }
 
       if (userId === caller.id) {
-        return errorResponse("FORBIDDEN: You cannot suspend your own account");
+        return errorResponse("FORBIDDEN: You cannot suspend your own account", headers);
       }
 
       const { data: targetProfile } = await supabaseAdmin
@@ -284,15 +299,15 @@ serve(async (req) => {
         .single();
 
       if (!targetProfile) {
-        return errorResponse("NOT_FOUND: User profile not found", 404);
+        return errorResponse("NOT_FOUND: User profile not found", headers, 404);
       }
 
       if (targetProfile.is_super_admin) {
-        return errorResponse("FORBIDDEN: Cannot suspend a platform administrator", 403);
+        return errorResponse("FORBIDDEN: Cannot suspend a platform administrator", headers, 403);
       }
 
       if (!isSuperAdmin && targetProfile.organization_id !== callerOrgId) {
-        return errorResponse("FORBIDDEN: User does not belong to your organization", 403);
+        return errorResponse("FORBIDDEN: User does not belong to your organization", headers, 403);
       }
 
       const isApprovedValue = !suspend;
@@ -302,7 +317,7 @@ serve(async (req) => {
         .eq("user_id", userId);
 
       if (updErr) {
-        return errorResponse(updErr.message, 400);
+        return errorResponse(updErr.message, headers, 400);
       }
 
       await logAudit(suspend ? "suspend_user" : "approve_user", "user", userId, { email: targetProfile.email });
@@ -310,19 +325,19 @@ serve(async (req) => {
       return jsonResponse({
         success: true,
         message: suspend ? "User account suspended" : "User account reactivated",
-      });
+      }, headers);
     }
 
     // --- ACTION: ASSIGN_ROLE ---
     if (action === "assign_role") {
       const { userId, role } = body;
       if (!userId || typeof userId !== "string") {
-        return errorResponse("VALIDATION_ERROR: 'userId' is required");
+        return errorResponse("VALIDATION_ERROR: 'userId' is required", headers);
       }
 
       const validRoles = ["owner", "manager", "supervisor", "worker", "addis_warehouse"];
       if (!validRoles.includes(role)) {
-        return errorResponse("VALIDATION_ERROR: Invalid role specified");
+        return errorResponse("VALIDATION_ERROR: Invalid role specified", headers);
       }
 
       const { data: targetProfile } = await supabaseAdmin
@@ -332,11 +347,11 @@ serve(async (req) => {
         .single();
 
       if (!targetProfile) {
-        return errorResponse("NOT_FOUND: User profile not found", 404);
+        return errorResponse("NOT_FOUND: User profile not found", headers, 404);
       }
 
       if (!isSuperAdmin && targetProfile.organization_id !== callerOrgId) {
-        return errorResponse("FORBIDDEN: User does not belong to your organization", 403);
+        return errorResponse("FORBIDDEN: User does not belong to your organization", headers, 403);
       }
 
       // Remove existing roles and insert new primary role
@@ -348,27 +363,27 @@ serve(async (req) => {
       });
 
       if (insErr) {
-        return errorResponse(insErr.message, 400);
+        return errorResponse(insErr.message, headers, 400);
       }
 
       await logAudit("assign_role", "user", userId, { role, email: targetProfile.email });
 
-      return jsonResponse({ success: true, message: `Role '${role}' assigned successfully` });
+      return jsonResponse({ success: true, message: `Role '${role}' assigned successfully` }, headers);
     }
 
     // --- ACTION: UPDATE_SUBSCRIPTION (SUPER ADMIN ONLY) ---
     if (action === "update_subscription") {
       if (!isSuperAdmin) {
-        return errorResponse("FORBIDDEN: Only platform super administrators can manage tenant subscriptions", 403);
+        return errorResponse("FORBIDDEN: Only platform super administrators can manage tenant subscriptions", headers, 403);
       }
 
       const { orgId, status } = body;
       if (!orgId || typeof orgId !== "string") {
-        return errorResponse("VALIDATION_ERROR: 'orgId' is required");
+        return errorResponse("VALIDATION_ERROR: 'orgId' is required", headers);
       }
 
       if (!["active", "past_due", "suspended"].includes(status)) {
-        return errorResponse("VALIDATION_ERROR: Invalid subscription status. Must be active, past_due, or suspended");
+        return errorResponse("VALIDATION_ERROR: Invalid subscription status. Must be active, past_due, or suspended", headers);
       }
 
       const { error: orgErr } = await supabaseAdmin
@@ -377,7 +392,7 @@ serve(async (req) => {
         .eq("id", orgId);
 
       if (orgErr) {
-        return errorResponse(orgErr.message, 400);
+        return errorResponse(orgErr.message, headers, 400);
       }
 
       await logAudit(
@@ -387,7 +402,7 @@ serve(async (req) => {
         { status }
       );
 
-      return jsonResponse({ success: true, message: `Organization subscription set to '${status}'` });
+      return jsonResponse({ success: true, message: `Organization subscription set to '${status}'` }, headers);
     }
 
     // --- ACTION: LIST_USERS ---
@@ -401,7 +416,7 @@ serve(async (req) => {
       }
 
       const { data: profiles, error: pErr } = await query;
-      if (pErr) return errorResponse(pErr.message, 400);
+      if (pErr) return errorResponse(pErr.message, headers, 400);
 
       const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
       const { data: orgs } = await supabaseAdmin.from("organizations").select("id, name");
@@ -433,12 +448,12 @@ serve(async (req) => {
         created_at: p.created_at,
       }));
 
-      return jsonResponse({ success: true, users });
+      return jsonResponse({ success: true, users }, headers);
     }
 
-    return errorResponse(`UNKNOWN_ACTION: Action '${action}' is not supported`);
+    return errorResponse(`UNKNOWN_ACTION: Action '${action}' is not supported`, headers);
   } catch (err: unknown) {
     console.error("Unhandled manage-users error:", err);
-    return errorResponse("Internal server error", 500);
+    return errorResponse("Internal server error", headers, 500);
   }
 });

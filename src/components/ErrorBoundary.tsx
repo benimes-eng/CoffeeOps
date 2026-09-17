@@ -31,13 +31,15 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="max-w-md bg-card border border-destructive/30 rounded-2xl p-8 card-shadow space-y-4">
             <h1 className="text-xl font-serif text-destructive">Application Error</h1>
             <p className="text-sm text-muted-foreground">
-              {this.state.error?.message || "An unexpected error occurred."}
+              An unexpected error occurred. Reload the application, and contact support if the issue persists.
             </p>
             <div className="pt-2 flex gap-3 justify-center">
               <Button
                 variant="outline"
                 onClick={() => {
-                  localStorage.clear();
+                  Object.keys(localStorage)
+                    .filter((key) => key.startsWith("sb-") || key.startsWith("coffeeops"))
+                    .forEach((key) => localStorage.removeItem(key));
                   window.location.href = "/auth";
                 }}
               >
