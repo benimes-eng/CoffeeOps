@@ -97,15 +97,53 @@ function useDashboardData() {
   return { beds, assignments, lots, workers, activityLogs, shipments };
 }
 
+interface ShipmentDashboardItem {
+  id: string;
+  status: string;
+  destination: string;
+  shipment_date: string;
+  lot_id: string | null;
+  confirmed_at?: string | null;
+  lots: { lot_number: string } | null;
+}
+
+interface ActivityLogDashboardItem {
+  id: string;
+  action_type: string;
+  description: string | null;
+  created_at: string;
+  bed_id: string;
+  beds: {
+    bed_number: string;
+    block_id: string | null;
+    blocks: {
+      name: string;
+      site_id: string | null;
+      sites: { name: string } | null;
+    } | null;
+  } | null;
+}
+
+interface BedDashboardItem {
+  id: string;
+  bed_number: string;
+  status: string;
+  surface_area: number | null;
+  block_id: string | null;
+  blocks: {
+    name: string;
+  } | null;
+}
+
 const Dashboard = () => {
   const { beds, assignments, lots, workers, activityLogs, shipments } = useDashboardData();
 
-  const allBeds = beds.data ?? [];
+  const allBeds = (beds.data ?? []) as unknown as BedDashboardItem[];
   const activeAssignments = (assignments.data ?? []).filter((a) => a.is_active);
   const allLots = lots.data ?? [];
   const allWorkers = workers.data ?? [];
-  const recentActivity = activityLogs.data ?? [];
-  const recentShipments = (shipments.data ?? []) as any[];
+  const recentActivity = (activityLogs.data ?? []) as unknown as ActivityLogDashboardItem[];
+  const recentShipments = (shipments.data ?? []) as unknown as ShipmentDashboardItem[];
 
   // Metrics
   const totalSurfaceArea = allBeds.reduce((s, b) => s + (Number(b.surface_area) || 0), 0);
@@ -144,17 +182,17 @@ const Dashboard = () => {
   statusCounts.finished = finishedBeds;
 
   const pieData = [
-    { name: "Drying (0-3 days)", value: statusCounts.critical, color: "hsl(0, 72%, 51%)" },
-    { name: "Active Drying", value: statusCounts.active, color: "hsl(40, 90%, 50%)" },
-    { name: "Finished", value: statusCounts.finished, color: "hsl(140, 45%, 42%)" },
-    { name: "Empty", value: statusCounts.empty, color: "hsl(25, 10%, 70%)" },
-    { name: "Maintenance", value: statusCounts.maintenance, color: "hsl(25, 25%, 12%)" },
+    { name: "Drying (0-3 days)", value: statusCounts.critical, color: "hsl(0, 84%, 60%)" },
+    { name: "Active Drying", value: statusCounts.active, color: "hsl(38, 92%, 50%)" },
+    { name: "Finished", value: statusCounts.finished, color: "hsl(158, 64%, 40%)" },
+    { name: "Empty", value: statusCounts.empty, color: "hsl(215, 16%, 75%)" },
+    { name: "Maintenance", value: statusCounts.maintenance, color: "hsl(222, 47%, 20%)" },
   ].filter((d) => d.value > 0);
 
   // Bar chart - by block
   const blockMap = new Map<string, { name: string; occupied: number; empty: number; maintenance: number }>();
   allBeds.forEach((bed) => {
-    const blockName = (bed as any).blocks?.name ?? "Unknown";
+    const blockName = bed.blocks?.name ?? "Unknown";
     if (!blockMap.has(blockName)) blockMap.set(blockName, { name: blockName, occupied: 0, empty: 0, maintenance: 0 });
     const entry = blockMap.get(blockName)!;
     if (bed.status === "maintenance") entry.maintenance++;
@@ -164,10 +202,10 @@ const Dashboard = () => {
   const barData = Array.from(blockMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   // Activity log formatting with site/block/bed details
-  const formatAction = (log: any) => {
+  const formatAction = (log: ActivityLogDashboardItem) => {
     const bedNum = log.beds?.bed_number ?? "Unknown";
-    const blockName = (log.beds as any)?.blocks?.name ?? "";
-    const siteName = (log.beds as any)?.blocks?.sites?.name ?? "";
+    const blockName = log.beds?.blocks?.name ?? "";
+    const siteName = log.beds?.blocks?.sites?.name ?? "";
     const location = [siteName, blockName].filter(Boolean).join(" – ");
 
     const actionMap: Record<string, string> = {
@@ -188,31 +226,43 @@ const Dashboard = () => {
   const isLoading = beds.isLoading || assignments.isLoading || lots.isLoading || workers.isLoading;
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-serif text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Farm operations overview</p>
+    <div className="space-y-6">
+      {/* Formal Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
+            <span>Enterprise Operations</span>
+            <span>/</span>
+            <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Executive Cockpit</span>
+          </div>
+          <h1 className="text-2xl font-bold font-sans tracking-tight text-foreground">
+            Washing Station Operations Control
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Consolidated drying field capacity, parchment batches, and regional export dispatches
+          </p>
+        </div>
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <MetricCard title="Drying Capacity" value={isLoading ? "..." : totalCapacity.toLocaleString()} subtitle="KG total" icon={<Layers className="w-4 h-4" />} />
-        <MetricCard title="Utilization" value={isLoading ? "..." : `${utilization}%`} subtitle="current" icon={<Activity className="w-4 h-4" />} />
-        <MetricCard title="Available Space" value={isLoading ? "..." : availableCapacity.toLocaleString()} subtitle="KG remaining" icon={<Package className="w-4 h-4" />} />
-        <MetricCard title="Active Batches" value={isLoading ? "..." : activeBatches} subtitle="drying" icon={<Clock className="w-4 h-4" />} />
-        <MetricCard title="Workers Active" value={isLoading ? "..." : activeWorkers} subtitle="total active" icon={<Users className="w-4 h-4" />} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <MetricCard title="Drying Capacity" value={isLoading ? "..." : `${(totalCapacity / 1000).toFixed(1)} T`} subtitle={`${totalCapacity.toLocaleString()} KG total`} icon={<Layers className="w-4 h-4" />} />
+        <MetricCard title="Field Utilization" value={isLoading ? "..." : `${utilization}%`} subtitle={`${occupiedWeight.toLocaleString()} KG loaded`} trend={utilization > 70 ? "up" : "neutral"} trendValue="Active" icon={<Activity className="w-4 h-4" />} />
+        <MetricCard title="Available Buffer" value={isLoading ? "..." : `${(availableCapacity / 1000).toFixed(1)} T`} subtitle="Ready for harvest intake" icon={<Package className="w-4 h-4" />} />
+        <MetricCard title="Active Batches" value={isLoading ? "..." : activeBatches} subtitle="On drying tables" icon={<Clock className="w-4 h-4" />} />
+        <MetricCard title="Active Labor Force" value={isLoading ? "..." : activeWorkers} subtitle="Field workers on shift" icon={<Users className="w-4 h-4" />} />
       </div>
 
       {/* Shipment Status Widget */}
-      <div className="bg-card rounded-xl p-6 card-shadow border border-border/50">
-        <div className="flex items-center gap-2 mb-4">
-          <Truck className="w-5 h-5 text-muted-foreground" />
-          <h3 className="font-serif text-lg">Shipment Status</h3>
+      <div className="bg-card rounded-lg p-5 border border-border/80 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <Truck className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+          <h3 className="font-sans font-bold text-sm text-foreground">Export Consignment Milestone Tracker</h3>
         </div>
         {latestShipment ? (
           <div>
             <p className="text-sm text-muted-foreground mb-3">
-              {(latestShipment as any).lots?.lot_number} → {latestShipment.destination}
+              {latestShipment.lots?.lot_number} → {latestShipment.destination}
             </p>
             <div className="flex items-center gap-2">
               {shipmentStatusSteps.map((step, i) => {
@@ -290,15 +340,15 @@ const Dashboard = () => {
           )}
           {/* Shipment arrival events */}
           {recentShipments
-            .filter((s: any) => s.status === "confirmed")
-            .map((s: any) => (
+            .filter((s) => s.status === "confirmed")
+            .map((s) => (
               <div key={`ship-${s.id}`} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0">
                 <span className="text-xs text-muted-foreground font-mono w-16 pt-0.5">
                   {s.confirmed_at ? format(new Date(s.confirmed_at), "HH:mm") : "—"}
                 </span>
                 <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-success" />
                 <p className="text-sm text-foreground">
-                  Shipment {(s as any).lots?.lot_number} arrived at {s.destination}
+                  Shipment {s.lots?.lot_number} arrived at {s.destination}
                 </p>
               </div>
             ))}

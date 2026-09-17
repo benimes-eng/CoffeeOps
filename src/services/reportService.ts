@@ -1,6 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 export type DateRange = "7" | "30" | "90" | "custom";
 
@@ -17,6 +15,21 @@ function getDateFrom(range: DateRange): string {
   return d.toISOString();
 }
 
+interface BedAssignmentRow {
+  assigned_weight: number;
+  density_used: number;
+  assigned_date: string;
+  is_active: boolean;
+  lots?: { lot_number: string; region: string } | null;
+  beds?: { bed_number: string } | null;
+}
+
+interface BedSummaryRow {
+  id: string;
+  bed_number: string;
+  status: string;
+}
+
 // ── Drying Report ──
 export async function fetchDryingReport(filters: ReportFilters) {
   const since = getDateFrom(filters.dateRange);
@@ -31,7 +44,10 @@ export async function fetchDryingReport(filters: ReportFilters) {
     .eq("organization_id", filters.orgId)
     .gte("assigned_date", since);
 
-  const rows = (assignments ?? []).map((a: any) => ({
+  const typedAssignments = (assignments as unknown as BedAssignmentRow[]) || [];
+  const typedBeds = (beds as unknown as BedSummaryRow[]) || [];
+
+  const rows = typedAssignments.map((a) => ({
     bed: a.beds?.bed_number ?? "-",
     lot: a.lots?.lot_number ?? "-",
     region: a.lots?.region ?? "-",
@@ -42,14 +58,23 @@ export async function fetchDryingReport(filters: ReportFilters) {
   }));
 
   const summary = {
-    totalBeds: beds?.length ?? 0,
-    occupied: beds?.filter((b: any) => b.status === "occupied").length ?? 0,
-    empty: beds?.filter((b: any) => b.status === "empty").length ?? 0,
-    maintenance: beds?.filter((b: any) => b.status === "maintenance").length ?? 0,
-    activeAssignments: assignments?.filter((a: any) => a.is_active).length ?? 0,
+    totalBeds: typedBeds.length,
+    occupied: typedBeds.filter((b) => b.status === "occupied").length,
+    empty: typedBeds.filter((b) => b.status === "empty").length,
+    maintenance: typedBeds.filter((b) => b.status === "maintenance").length,
+    activeAssignments: typedAssignments.filter((a) => a.is_active).length,
   };
 
   return { rows, summary, headers: ["Bed", "Lot", "Region", "Weight (KG)", "Density", "Assigned", "Status"] };
+}
+
+interface PayrollReportRow {
+  period_start: string;
+  period_end: string;
+  total_hours: number;
+  total_pay: number;
+  approved: boolean;
+  workers?: { name: string; role: string } | null;
 }
 
 // ── Payroll Report ──
@@ -61,7 +86,9 @@ export async function fetchPayrollReport(filters: ReportFilters) {
     .eq("organization_id", filters.orgId)
     .gte("period_start", since.split("T")[0]);
 
-  const rows = (data ?? []).map((p: any) => ({
+  const typedData = (data as unknown as PayrollReportRow[]) || [];
+
+  const rows = typedData.map((p) => ({
     worker: p.workers?.name ?? "-",
     role: p.workers?.role ?? "-",
     period: `${p.period_start} → ${p.period_end}`,
@@ -71,7 +98,7 @@ export async function fetchPayrollReport(filters: ReportFilters) {
   }));
 
   const totalPay = rows.reduce((s, r) => s + Number(r.pay), 0);
-  return { rows, summary: { totalPay, records: rows.length }, headers: ["Worker", "Role", "Period", "Hours", "Pay (KES)", "Approved"] };
+  return { rows, summary: { totalPay, records: rows.length }, headers: ["Worker", "Role", "Period", "Hours", "Pay (ETB)", "Approved"] };
 }
 
 // ── Intake Report ──
@@ -115,6 +142,11 @@ export async function fetchInventoryReport(filters: ReportFilters) {
   return { rows, summary: { totalItems: rows.length }, headers: ["Name", "Category", "Quantity", "Unit", "Status", "Location"] };
 }
 
+interface ProductionAssignmentRow {
+  assigned_weight: number;
+  is_active: boolean;
+}
+
 // ── Production Report ──
 export async function fetchProductionReport(filters: ReportFilters) {
   const since = getDateFrom(filters.dateRange);
@@ -130,9 +162,11 @@ export async function fetchProductionReport(filters: ReportFilters) {
     .eq("organization_id", filters.orgId)
     .gte("assigned_date", since);
 
+  const typedAssignments = (assignments as unknown as ProductionAssignmentRow[]) || [];
+
   const totalIntake = (lots ?? []).reduce((s, l) => s + Number(l.initial_weight), 0);
-  const totalDrying = (assignments ?? []).filter((a: any) => a.is_active).reduce((s: number, a: any) => s + Number(a.assigned_weight), 0);
-  const completed = (assignments ?? []).filter((a: any) => !a.is_active).length;
+  const totalDrying = typedAssignments.filter((a) => a.is_active).reduce((s, a) => s + Number(a.assigned_weight), 0);
+  const completed = typedAssignments.filter((a) => !a.is_active).length;
 
   const rows = (lots ?? []).map((l) => ({
     lot: l.lot_number,
@@ -150,6 +184,12 @@ export async function fetchProductionReport(filters: ReportFilters) {
   };
 }
 
+interface WorkLogRow {
+  worker_id: string;
+  hours_worked: number;
+  workers?: { name: string; role: string } | null;
+}
+
 // ── Worker Performance Report ──
 export async function fetchWorkerPerformanceReport(filters: ReportFilters) {
   const since = getDateFrom(filters.dateRange);
@@ -159,9 +199,11 @@ export async function fetchWorkerPerformanceReport(filters: ReportFilters) {
     .eq("organization_id", filters.orgId)
     .gte("date", since.split("T")[0]);
 
+  const typedData = (data as unknown as WorkLogRow[]) || [];
+
   // Group by worker
   const grouped: Record<string, { name: string; role: string; hours: number; activities: number }> = {};
-  (data ?? []).forEach((wl: any) => {
+  typedData.forEach((wl) => {
     const id = wl.worker_id;
     if (!grouped[id]) grouped[id] = { name: wl.workers?.name ?? "-", role: wl.workers?.role ?? "-", hours: 0, activities: 0 };
     grouped[id].hours += Number(wl.hours_worked);
@@ -179,15 +221,28 @@ export async function fetchWorkerPerformanceReport(filters: ReportFilters) {
   return { rows, summary: { totalWorkers: rows.length }, headers: ["Worker", "Role", "Total Hours", "Activities", "Avg Hours/Activity"] };
 }
 
-// ── CSV Export ──
-export function exportCSV(title: string, headers: string[], rows: Record<string, any>[]) {
+/**
+ * Sanitizes a cell string to protect spreadsheet software from formula injection.
+ * Prepends a single quote if the field begins with =, +, -, @, tab, or carriage return.
+ */
+export function sanitizeCSVCell(value: unknown): string {
+  if (value === null || value === undefined) return '""';
+  let str = String(value);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+// ── CSV Export (Hardened against Formula Injection) ──
+export function exportCSV(title: string, headers: string[], rows: Record<string, unknown>[]) {
   const keys = Object.keys(rows[0] ?? {});
   const csv = [
-    headers.join(","),
-    ...rows.map((r) => keys.map((k) => `"${r[k]}"`).join(",")),
+    headers.map(sanitizeCSVCell).join(","),
+    ...rows.map((r) => keys.map((k) => sanitizeCSVCell(r[k])).join(",")),
   ].join("\n");
 
-  const blob = new Blob([csv], { type: "text/csv" });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -196,14 +251,19 @@ export function exportCSV(title: string, headers: string[], rows: Record<string,
   URL.revokeObjectURL(url);
 }
 
-// ── PDF Export ──
-export function exportPDF(
+// ── PDF Export (Dynamically loaded to minimize initial bundle) ──
+export async function exportPDF(
   title: string,
   headers: string[],
-  rows: Record<string, any>[],
-  summary?: Record<string, any>,
+  rows: Record<string, unknown>[],
+  summary?: Record<string, unknown>,
   orgName?: string
 ) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+
   const doc = new jsPDF();
   const keys = Object.keys(rows[0] ?? {});
 
@@ -231,10 +291,11 @@ export function exportPDF(
   autoTable(doc, {
     startY,
     head: [headers],
-    body: rows.map((r) => keys.map((k) => String(r[k]))),
+    body: rows.map((r) => keys.map((k) => String(r[k] ?? ""))),
     styles: { fontSize: 8 },
     headStyles: { fillColor: [30, 70, 50] },
   });
 
   doc.save(`${title.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`);
 }
+

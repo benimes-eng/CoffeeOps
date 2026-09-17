@@ -383,7 +383,11 @@ export type Database = {
           id: string
           item_id: string
           organization_id: string
+          performed_by: string | null
           quantity: number
+          reason: string | null
+          reference_id: string | null
+          reference_type: string | null
           type: Database["public"]["Enums"]["movement_type"]
         }
         Insert: {
@@ -391,7 +395,11 @@ export type Database = {
           id?: string
           item_id: string
           organization_id: string
+          performed_by?: string | null
           quantity: number
+          reason?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
           type: Database["public"]["Enums"]["movement_type"]
         }
         Update: {
@@ -399,7 +407,11 @@ export type Database = {
           id?: string
           item_id?: string
           organization_id?: string
+          performed_by?: string | null
           quantity?: number
+          reason?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
           type?: Database["public"]["Enums"]["movement_type"]
         }
         Relationships: [
@@ -427,7 +439,9 @@ export type Database = {
           initial_weight: number
           intake_date: string
           lot_number: string
+          notes: string | null
           organization_id: string
+          parent_lot_ids: string[] | null
           region: string
           status: Database["public"]["Enums"]["lot_status"]
           updated_at: string
@@ -439,7 +453,9 @@ export type Database = {
           initial_weight: number
           intake_date?: string
           lot_number: string
+          notes?: string | null
           organization_id: string
+          parent_lot_ids?: string[] | null
           region: string
           status?: Database["public"]["Enums"]["lot_status"]
           updated_at?: string
@@ -451,7 +467,9 @@ export type Database = {
           initial_weight?: number
           intake_date?: string
           lot_number?: string
+          notes?: string | null
           organization_id?: string
+          parent_lot_ids?: string[] | null
           region?: string
           status?: Database["public"]["Enums"]["lot_status"]
           updated_at?: string
@@ -635,6 +653,7 @@ export type Database = {
           lot_id: string
           organization_id: string
           shipment_date: string
+          shipment_number: string | null
           status: string
           weight: number
         }
@@ -646,6 +665,7 @@ export type Database = {
           lot_id: string
           organization_id: string
           shipment_date?: string
+          shipment_number?: string | null
           status?: string
           weight: number
         }
@@ -657,6 +677,7 @@ export type Database = {
           lot_id?: string
           organization_id?: string
           shipment_date?: string
+          shipment_number?: string | null
           status?: string
           weight?: number
         }
@@ -832,6 +853,114 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      fn_assign_bed: {
+        Args: {
+          p_bed_id: string
+          p_lot_id: string
+          p_weight: number
+          p_density?: number
+        }
+        Returns: Json
+      }
+      fn_approve_payroll: {
+        Args: {
+          p_payroll_id: string
+        }
+        Returns: Json
+      }
+      fn_complete_grinding: {
+        Args: {
+          p_batch_id: string
+          p_ground_weight: number
+        }
+        Returns: Json
+      }
+      fn_create_lot: {
+        Args: {
+          p_region: string
+          p_initial_weight: number
+          p_intake_date?: string
+          p_notes?: string | null
+          p_is_purchased_dry?: boolean
+        }
+        Returns: Json
+      }
+      fn_create_shipment: {
+        Args: {
+          p_lot_id: string
+          p_destination: string
+          p_shipment_date?: string
+        }
+        Returns: Json
+      }
+      fn_dispatch_to_djibouti: {
+        Args: {
+          p_hub_inventory_id: string
+          p_container_number: string
+          p_vessel_name: string
+          p_booking_ref: string
+          p_seal_number: string
+          p_dispatch_weight: number
+          p_expected_arrival: string
+        }
+        Returns: Json
+      }
+      fn_finish_drying: {
+        Args: {
+          p_bed_id: string
+          p_assignment_id: string
+          p_final_weight: number
+        }
+        Returns: Json
+      }
+      fn_generate_payroll: {
+        Args: {
+          p_worker_id: string
+          p_period_start: string
+          p_period_end: string
+        }
+        Returns: Json
+      }
+      fn_merge_lots: {
+        Args: {
+          p_source_lot_ids: string[]
+          p_notes?: string | null
+        }
+        Returns: Json
+      }
+      fn_receive_at_addis_hub: {
+        Args: {
+          p_shipment_id: string
+          p_actual_weight: number
+          p_moisture?: number | null
+          p_warehouse_bay?: string | null
+        }
+        Returns: Json
+      }
+      fn_record_inventory_movement: {
+        Args: {
+          p_item_id: string
+          p_type: Database["public"]["Enums"]["movement_type"]
+          p_quantity: number
+          p_reason?: string | null
+          p_ref_type?: string | null
+          p_ref_id?: string | null
+        }
+        Returns: Json
+      }
+      fn_start_grinding: {
+        Args: {
+          p_lot_id: string
+        }
+        Returns: Json
+      }
+      fn_update_shipment_status: {
+        Args: {
+          p_shipment_id: string
+          p_new_status: string
+        }
+        Returns: Json
+      }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -841,9 +970,16 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      next_document_number: {
+        Args: {
+          p_org_id: string
+          p_prefix: string
+        }
+        Returns: string
+      }
     }
     Enums: {
-      app_role: "owner" | "manager" | "supervisor" | "worker"
+      app_role: "super_admin" | "owner" | "manager" | "supervisor" | "worker" | "addis_warehouse"
       bed_action_type:
         | "turning"
         | "cleaning"
@@ -865,6 +1001,7 @@ export type Database = {
         | "ready_for_grinding"
         | "grinding"
         | "ready_for_shipment"
+        | "merged"
       movement_type: "in" | "out"
       wage_type: "daily" | "hourly" | "monthly"
       worker_status: "active" | "on_leave" | "terminated"
@@ -995,7 +1132,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["owner", "manager", "supervisor", "worker"],
+      app_role: ["super_admin", "owner", "manager", "supervisor", "worker", "addis_warehouse"],
       bed_action_type: [
         "turning",
         "cleaning",
@@ -1018,6 +1155,7 @@ export const Constants = {
         "ready_for_grinding",
         "grinding",
         "ready_for_shipment",
+        "merged",
       ],
       movement_type: ["in", "out"],
       wage_type: ["daily", "hourly", "monthly"],

@@ -57,50 +57,64 @@ export function BatchView({ beds }: Props) {
   };
 
   if (batches.length === 0) {
-    return <p className="text-muted-foreground text-sm py-8 text-center">No active batches.</p>;
+    return (
+      <div className="bg-card rounded-lg p-12 border border-border text-center">
+        <p className="text-sm text-muted-foreground">No active parchment drying batches found across washing station beds.</p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
       {batches.map((batch) => (
-        <div key={batch.date} className="bg-card rounded-xl p-5 card-shadow border border-border/50">
-          <div className="flex items-center justify-between mb-3">
+        <div key={batch.date} className="bg-card rounded-lg p-5 border border-border/80 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-border/60">
             <div>
-              <h3 className="font-serif text-lg">
-                Batch — {format(new Date(batch.date), "MMM dd, yyyy")}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {batch.beds.length} bed(s) • {batch.totalWeight.toFixed(0)} KG • Day {batch.oldestDay}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
+                  Batch {format(new Date(batch.date), "yyyy-MM-dd")}
+                </span>
+                <span className="text-xs text-muted-foreground">Intake Date: {format(new Date(batch.date), "MMMM d, yyyy")}</span>
+              </div>
+              <p className="text-xs text-muted-foreground font-mono mt-1">
+                {batch.beds.length} drying bed(s) • Total Parchment Weight: {batch.totalWeight.toLocaleString()} KG
               </p>
             </div>
-            <div className="flex items-center gap-1.5">
-              {/* Progress indicator */}
-              <div className="w-20 h-2 bg-border rounded-full overflow-hidden">
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <span className="text-xs font-bold font-mono text-foreground">Day {batch.oldestDay} / 14</span>
+                <span className="text-[10px] text-muted-foreground block">
+                  {batch.oldestDay > 10 ? "Near Target (11%)" : batch.oldestDay > 3 ? "Active Aeration" : "Initial Drying"}
+                </span>
+              </div>
+              <div className="w-24 h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border">
                 <div
-                  className={`h-full rounded-full ${batch.oldestDay > 10 ? "bg-success" : batch.oldestDay > 3 ? "bg-warning" : "bg-status-red"}`}
+                  className={`h-full rounded-full ${batch.oldestDay > 10 ? "bg-emerald-600" : batch.oldestDay > 3 ? "bg-amber-500" : "bg-red-500"}`}
                   style={{ width: `${Math.min(100, (batch.oldestDay / 14) * 100)}%` }}
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-1.5 mb-4">
+            <span className="text-xs font-semibold text-muted-foreground mr-1">Assigned Beds:</span>
             {batch.beds.map((bed) => (
-              <span key={bed.id} className="text-xs bg-muted px-2 py-1 rounded-md font-medium">
-                {bed.bed_number}
+              <span key={bed.id} className="text-xs font-mono bg-slate-50 dark:bg-slate-900 border px-2 py-1 rounded text-foreground font-medium">
+                Bed {bed.bed_number} ({Number(bed.active_assignment?.assigned_weight)}kg)
               </span>
             ))}
           </div>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => bulkLog(batch, "turning", "Bulk turning")}>
-              <RotateCcw className="w-3.5 h-3.5" /> Turn All
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40">
+            <span className="text-xs text-muted-foreground font-medium mr-2">Batch Operations:</span>
+            <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs font-medium" onClick={() => bulkLog(batch, "turning", "Morning / afternoon batch turning and aeration")}>
+              <RotateCcw className="w-3.5 h-3.5 text-amber-600" /> Bulk Rake & Turn All
             </Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => bulkLog(batch, "cleaning", "Bulk cleaning")}>
-              <Sparkles className="w-3.5 h-3.5" /> Clean All
+            <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs font-medium" onClick={() => bulkLog(batch, "cleaning", "Station hand-sorting and defect triage")}>
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Log Defect Hand-Sorting
             </Button>
-            <Button variant="outline" size="sm" className="gap-1.5 text-success" onClick={() => bulkFinish(batch)}>
-              <CheckCircle2 className="w-3.5 h-3.5" /> Finish Batch
+            <Button variant="default" size="sm" className="gap-1.5 h-8 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white ml-auto" onClick={() => bulkFinish(batch)}>
+              <CheckCircle2 className="w-3.5 h-3.5" /> Final Dry Weigh-Out
             </Button>
           </div>
         </div>

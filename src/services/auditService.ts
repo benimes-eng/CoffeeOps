@@ -31,13 +31,13 @@ export async function logAudit(
 
     if (!profile) return;
 
-    await (supabase.from("audit_logs") as any).insert({
+    await supabase.from("audit_logs").insert({
       user_id: user.id,
       organization_id: profile.organization_id,
       action,
       entity_type: entityType,
       entity_id: entityId ?? null,
-      details: details ?? {},
+      details: (details as Record<string, unknown>) ?? null,
     });
   } catch (e) {
     console.error("Audit log failed:", e);

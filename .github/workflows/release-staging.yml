@@ -1,0 +1,47 @@
+name: Staging Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Release tag/version (e.g. v1.2.0-rc1)"
+        required: true
+        default: "staging-latest"
+
+jobs:
+  deploy-staging:
+    name: Build & Release to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Quality Gates
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm run test
+
+      - name: Build Staging Distribution
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-dist-${{ github.event.inputs.release_version }}
+          path: dist/
+          retention-days: 7

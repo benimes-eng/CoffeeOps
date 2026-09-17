@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,96 +6,100 @@
 
 @layer base {
   :root {
-    --background: 35 30% 97%;
-    --foreground: 25 25% 12%;
+    /* Crisp Modern Enterprise Slate/Navy Canvas */
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 25 25% 12%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 25 25% 12%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 25 45% 22%;
-    --primary-foreground: 35 30% 97%;
+    /* Premium Coffee Roast & Deep Emerald Accents */
+    --primary: 160 84% 20%;         /* Deep Forest Emerald #084c38 */
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 140 20% 45%;
+    --secondary: 215 16% 47%;       /* Slate Secondary */
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 35 20% 92%;
-    --muted-foreground: 25 10% 46%;
+    --muted: 210 20% 94%;
+    --muted-foreground: 215 16% 40%;
 
-    --accent: 35 70% 50%;
-    --accent-foreground: 25 45% 12%;
+    --accent: 38 92% 50%;          /* Amber parchment highlight */
+    --accent-foreground: 222 47% 11%;
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 35 15% 88%;
-    --input: 35 15% 88%;
-    --ring: 25 45% 22%;
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 160 84% 20%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;               /* Sleek modern edge */
 
-    --sidebar-background: 25 30% 15%;
-    --sidebar-foreground: 35 20% 85%;
-    --sidebar-primary: 35 70% 50%;
-    --sidebar-primary-foreground: 25 45% 12%;
-    --sidebar-accent: 25 25% 22%;
-    --sidebar-accent-foreground: 35 20% 90%;
-    --sidebar-border: 25 20% 22%;
-    --sidebar-ring: 35 70% 50%;
-    --sidebar-muted: 25 15% 35%;
+    /* Professional Dark Charcoal & Slate Sidebar */
+    --sidebar-background: 222 47% 11%;    /* Slate 900 #0f172a */
+    --sidebar-foreground: 215 20% 88%;
+    --sidebar-primary: 160 84% 39%;       /* Vibrant Emerald active tab */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;        /* Slate 800 hover */
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 18%;
+    --sidebar-ring: 160 84% 39%;
+    --sidebar-muted: 215 16% 52%;
 
-    /* Custom tokens */
-    --success: 140 45% 42%;
+    /* Enterprise Operational Tokens */
+    --success: 158 64% 40%;        /* Crisp Emerald */
     --success-foreground: 0 0% 100%;
-    --warning: 40 90% 50%;
-    --warning-foreground: 25 45% 12%;
-    --info: 200 60% 50%;
+    --warning: 38 92% 50%;         /* Warm Amber */
+    --warning-foreground: 0 0% 0%;
+    --info: 217 91% 60%;           /* Operational Blue */
     --info-foreground: 0 0% 100%;
 
-    /* Status colors for beds */
-    --status-red: 0 72% 51%;
-    --status-yellow: 40 90% 50%;
-    --status-green: 140 45% 42%;
-    --status-grey: 25 10% 70%;
-    --status-black: 25 25% 12%;
+    /* Drying Stage Indicators */
+    --status-red: 0 84% 60%;
+    --status-yellow: 38 92% 50%;
+    --status-green: 158 64% 40%;
+    --status-grey: 215 16% 75%;
+    --status-black: 222 47% 20%;
 
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(25 25% 12% / 0.04);
-    --shadow-md: 0 4px 12px -2px hsl(25 25% 12% / 0.06);
-    --shadow-lg: 0 10px 30px -4px hsl(25 25% 12% / 0.08);
+    /* Crisp Precision Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+    --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.04);
   }
 
   .dark {
-    --background: 25 20% 8%;
-    --foreground: 35 20% 92%;
-    --card: 25 20% 11%;
-    --card-foreground: 35 20% 92%;
-    --popover: 25 20% 11%;
-    --popover-foreground: 35 20% 92%;
-    --primary: 35 70% 50%;
-    --primary-foreground: 25 30% 10%;
-    --secondary: 140 20% 35%;
+    --background: 222 47% 8%;       /* Slate 950 #020617 */
+    --foreground: 210 40% 98%;
+    --card: 222 47% 11%;            /* Slate 900 #0f172a */
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 158 64% 45%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 215 16% 47%;
     --secondary-foreground: 0 0% 100%;
-    --muted: 25 15% 18%;
-    --muted-foreground: 35 10% 55%;
-    --accent: 35 70% 50%;
-    --accent-foreground: 25 30% 10%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 38 92% 50%;
+    --accent-foreground: 222 47% 8%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 25 15% 20%;
-    --input: 25 15% 20%;
-    --ring: 35 70% 50%;
-    --sidebar-background: 25 25% 8%;
-    --sidebar-foreground: 35 20% 85%;
-    --sidebar-primary: 35 70% 50%;
-    --sidebar-primary-foreground: 25 30% 10%;
-    --sidebar-accent: 25 20% 15%;
-    --sidebar-accent-foreground: 35 20% 90%;
-    --sidebar-border: 25 15% 15%;
-    --sidebar-ring: 35 70% 50%;
-    --sidebar-muted: 25 10% 30%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 18%;
+    --input: 217 33% 18%;
+    --ring: 158 64% 45%;
+
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 215 20% 88%;
+    --sidebar-primary: 158 64% 45%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 217 33% 14%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 15%;
+    --sidebar-ring: 158 64% 45%;
+    --sidebar-muted: 215 16% 45%;
   }
 }
 
@@ -105,18 +109,28 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
-  h1, h2, h3, h4 {
-    font-family: 'Instrument Serif', serif;
-    @apply tracking-tight;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    @apply tracking-tight font-semibold text-foreground;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-feature-settings: "tnum";
   }
 }
 
 @layer utilities {
   .card-shadow {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card-shadow-md {
     box-shadow: var(--shadow-md);
   }
 
@@ -125,15 +139,10 @@
   }
 
   .metric-card {
-    @apply bg-card rounded-xl p-5 card-shadow border border-border/50 transition-all duration-200;
-  }
-
-  .metric-card:hover {
-    box-shadow: var(--shadow-lg);
-    @apply -translate-y-0.5;
+    @apply bg-card rounded-lg p-5 border border-border/80 shadow-sm transition-all duration-150 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700;
   }
 
   .status-badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide uppercase;
   }
 }

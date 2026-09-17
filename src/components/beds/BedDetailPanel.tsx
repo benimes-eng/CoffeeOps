@@ -47,6 +47,8 @@ export function BedDetailPanel({ bed, open, onClose, density = 30 }: Props) {
   // Completion flow
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [finalWeight, setFinalWeight] = useState("");
+  const [moistureValue, setMoistureValue] = useState("");
+  const [showMoistureInput, setShowMoistureInput] = useState(false);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -78,116 +80,147 @@ export function BedDetailPanel({ bed, open, onClose, density = 30 }: Props) {
   const handleFinish = async () => {
     if (!assignment) return;
     const fw = Number(finalWeight);
+    if (!fw || fw <= 0) {
+      toast({ title: "Validation Error", description: "Please enter a valid final dry weight (KG)", variant: "destructive" });
+      return;
+    }
     try {
-      // Save final weight
-      if (fw > 0) {
-        await supabase.from("bed_assignments").update({ final_weight: fw } as any).eq("id", assignment.id);
-      }
-      // Update lot status to ready_for_grinding
-      if (lot) {
-        await supabase.from("lots").update({ status: "ready_for_grinding" as any, current_weight: fw > 0 ? fw : lot.current_weight }).eq("id", lot.id);
-      }
-      await finish.mutateAsync({ bedId: bed.id, assignmentId: assignment.id });
-      qc.invalidateQueries({ queryKey: ["lots"] });
-      toast({ title: "Bed completed — lot ready for grinding" });
+      await finish.mutateAsync({ bedId: bed.id, assignmentId: assignment.id, finalWeight: fw });
       setShowFinishDialog(false);
       setFinalWeight("");
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e.message : "Failed to finish drying";
+      toast({ title: "Error", description: err, variant: "destructive" });
     }
+  };
+
+  const handleLogMoisture = () => {
+    const mv = Number(moistureValue);
+    if (!mv || mv < 5 || mv > 70) {
+      toast({ title: "Invalid Moisture", description: "Please enter a valid moisture % (between 5% and 70%)", variant: "destructive" });
+      return;
+    }
+    quickAction("moisture_reading", `Moisture test logged: ${mv}% (Target: 11.0%)`);
+    setShowMoistureInput(false);
+    setMoistureValue("");
+    toast({ title: "Moisture Logged", description: `Recorded ${mv}% moisture for Bed ${bed.bed_number}` });
   };
 
   return (
     <>
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="font-serif text-xl flex items-center gap-3">
-              Bed {bed.bed_number}
-              <span className={`status-badge ${statusBadge[color]}`}>
-                {bed.status === "maintenance" ? "Maintenance" : phase ? phaseLabels[phase] : "Empty"}
-              </span>
-            </SheetTitle>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto border-l border-border bg-card">
+          <SheetHeader className="border-b border-border pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-mono uppercase text-muted-foreground tracking-wider">Washing Station Field Map</p>
+                <SheetTitle className="font-sans font-bold text-xl flex items-center gap-2 mt-0.5">
+                  Bed {bed.bed_number}
+                  <span className={`text-[11px] px-2 py-0.5 rounded border font-semibold uppercase ${statusBadge[color]}`}>
+                    {bed.status === "maintenance" ? "Maintenance" : phase ? phaseLabels[phase] : "Vacant"}
+                  </span>
+                </SheetTitle>
+              </div>
+            </div>
           </SheetHeader>
 
-          <div className="mt-6 space-y-6">
+          <div className="mt-5 space-y-6">
             {/* Bed Info */}
-            <section>
-              <h4 className="text-sm font-semibold text-muted-foreground mb-3">Bed Information</h4>
-              <div className="space-y-2">
-                <Row label="Bed ID" value={bed.id.slice(0, 8)} />
-                <Row label="Block" value={bed.block?.name || "—"} />
-                <Row label="Site" value={bed.block?.site?.name || "—"} />
-                <Row label="Dimensions" value={`${Number(bed.length)} × ${Number(bed.width)} m`} />
-                <Row label="Surface Area" value={`${area} m²`} />
-                <Row label="Capacity" value={`${bedCapacity.toFixed(0)} KG`} />
-                <Row label="Material" value={bed.material_type || "—"} />
-                <Row label="Status" value={bed.status} />
+            <section className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 border border-border/80">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Specifications</h4>
+              <div className="space-y-1.5">
+                <Row label="Block Assignment" value={bed.block?.name || "—"} />
+                <Row label="Washing Site" value={bed.block?.site?.name || "—"} />
+                <Row label="Dimensions" value={`${Number(bed.length)}m × ${Number(bed.width)}m (${area} m²)`} />
+                <Row label="Optimal Bed Capacity" value={`${bedCapacity.toFixed(0)} KG (at ${density} KG/m²)`} />
+                <Row label="Mesh / Bed Material" value={bed.material_type || "Standard Wire Mesh"} />
+                <Row label="Operational Status" value={bed.status.toUpperCase()} />
               </div>
             </section>
 
             {/* Current Lot */}
             {lot && assignment && (
-              <>
-                <Separator />
-                <section>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3">Current Lot</h4>
-                  <div className="space-y-2">
-                    <Row label="Lot Number" value={lot.lot_number} />
-                    <Row label="Region" value={lot.region} />
-                    <Row label="Batch Description" value={`${lot.lot_number} from ${lot.region}`} />
-                    <Row label="Start Drying Date" value={format(new Date(assignment.assigned_date), "MMM dd, yyyy")} />
-                    <Row label="Assigned Weight" value={`${Number(assignment.assigned_weight)} KG`} />
-                    <Row label="Drying Days" value={`${days}`} />
-                    <Row label="Drying Phase" value={phase ? phaseLabels[phase] : "—"} />
-                    {assignment.expected_completion && (
-                      <Row label="Expected Completion" value={format(new Date(assignment.expected_completion), "MMM dd, yyyy")} />
-                    )}
-                  </div>
-                </section>
-              </>
+              <section className="border border-border/80 rounded-lg p-3 bg-card">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Current Parchment Lot</h4>
+                  <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded font-semibold">
+                    Day {days} / 14
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  <Row label="Lot Tracking ID" value={lot.lot_number} />
+                  <Row label="Origin Region" value={lot.region} />
+                  <Row label="Intake Date" value={format(new Date(assignment.assigned_date), "MMM dd, yyyy")} />
+                  <Row label="Assigned Wet Weight" value={`${Number(assignment.assigned_weight).toLocaleString()} KG`} />
+                  <Row label="Surface Loading" value={`${(Number(assignment.assigned_weight) / area).toFixed(1)} KG/m²`} />
+                  <Row label="Drying Stage" value={phase ? phaseLabels[phase] : "Active"} />
+                  {assignment.expected_completion && (
+                    <Row label="Target Dry Completion" value={format(new Date(assignment.expected_completion), "MMM dd, yyyy")} />
+                  )}
+                </div>
+              </section>
             )}
 
-            {/* Quick Actions */}
-            <Separator />
+            {/* Quick Field Operations */}
             <section>
-              <h4 className="text-sm font-semibold text-muted-foreground mb-3">Quick Actions</h4>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Field Operations</h4>
               <div className="grid grid-cols-2 gap-2">
                 {bed.status === "empty" && (
-                  <Button variant="default" size="sm" className="justify-start gap-2 col-span-2" onClick={() => setShowQuickAssign(!showQuickAssign)}>
-                    <Plus className="w-4 h-4" /> Assign Coffee
+                  <Button variant="default" size="sm" className="justify-start gap-2 col-span-2 bg-emerald-700 hover:bg-emerald-800 text-white font-medium" onClick={() => setShowQuickAssign(!showQuickAssign)}>
+                    <Plus className="w-4 h-4" /> Direct Lot Staging
                   </Button>
                 )}
                 {bed.status === "occupied" && (
                   <>
-                    <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => quickAction("turning", "Turning performed")}>
-                      <RotateCcw className="w-4 h-4" /> Log Turning
+                    <Button variant="outline" size="sm" className="justify-start gap-2 font-medium hover:bg-slate-100" onClick={() => quickAction("turning", "Daily bed turning and aeration performed")}>
+                      <RotateCcw className="w-3.5 h-3.5 text-amber-600" /> Log Turning
                     </Button>
-                    <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => quickAction("cleaning", "Cleaning/sorting performed")}>
-                      <Sparkles className="w-4 h-4" /> Log Cleaning
+                    <Button variant="outline" size="sm" className="justify-start gap-2 font-medium hover:bg-slate-100" onClick={() => quickAction("cleaning", "Hand-sorting and defect picking performed")}>
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Log Hand Sorting
                     </Button>
-                    <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => quickAction("rain_cover", "Rain cover deployed")}>
-                      <CloudRain className="w-4 h-4" /> Rain Cover
+                    <Button variant="outline" size="sm" className="justify-start gap-2 font-medium hover:bg-slate-100" onClick={() => quickAction("rain_cover", "Rain canopy / night shade cover deployed")}>
+                      <CloudRain className="w-3.5 h-3.5 text-indigo-600" /> Rain Cover / Shade
                     </Button>
-                    <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => quickAction("inspection", "Moisture testing performed")}>
-                      <Droplets className="w-4 h-4" /> Moisture Test
+                    <Button variant="outline" size="sm" className="justify-start gap-2 font-medium hover:bg-slate-100" onClick={() => setShowMoistureInput(!showMoistureInput)}>
+                      <Droplets className="w-3.5 h-3.5 text-cyan-600" /> Record Moisture %
                     </Button>
-                    <Button variant="outline" size="sm" className="justify-start gap-2 text-success col-span-2" onClick={() => setShowFinishDialog(true)}>
-                      <CheckCircle2 className="w-4 h-4" /> Mark as Complete
+                    <Button variant="default" size="sm" className="justify-start gap-2 col-span-2 bg-emerald-700 hover:bg-emerald-800 text-white font-medium" onClick={() => setShowFinishDialog(true)}>
+                      <CheckCircle2 className="w-4 h-4" /> Weigh Out to Warehouse
                     </Button>
                   </>
                 )}
                 {bed.status !== "maintenance" && (
-                  <Button variant="outline" size="sm" className="justify-start gap-2 text-destructive" onClick={() => setShowMaintInput(true)}>
-                    <AlertTriangle className="w-4 h-4" /> Flag Maintenance
+                  <Button variant="outline" size="sm" className="justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setShowMaintInput(true)}>
+                    <AlertTriangle className="w-3.5 h-3.5" /> Flag Maintenance
                   </Button>
                 )}
                 {bed.status === "maintenance" && (
-                  <Button variant="outline" size="sm" className="justify-start gap-2 text-success" onClick={() => removeMaint.mutate({ bedId: bed.id })}>
-                    <Wrench className="w-4 h-4" /> Remove Maintenance
+                  <Button variant="outline" size="sm" className="justify-start gap-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50" onClick={() => removeMaint.mutate({ bedId: bed.id })}>
+                    <Wrench className="w-3.5 h-3.5" /> Restore to Vacant
                   </Button>
                 )}
               </div>
+
+              {/* Moisture Input Drawer */}
+              {showMoistureInput && (
+                <div className="mt-3 bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3 space-y-2">
+                  <Label className="text-xs font-semibold text-blue-950 dark:text-blue-200">Current Moisture Reading (%)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="e.g. 11.5"
+                      value={moistureValue}
+                      onChange={(e) => setMoistureValue(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                    <Button size="sm" onClick={handleLogMoisture} className="bg-blue-600 hover:bg-blue-700 text-white">
+                      Save
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Standard export parchment specification: 10.5% – 11.5%</p>
+                </div>
+              )}
 
               {/* Quick Assign Form */}
               {showQuickAssign && (

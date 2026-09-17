@@ -63,7 +63,7 @@ export function useBedActions() {
       invalidate();
       toast({ title: "Action logged" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const assign = useMutation({
@@ -75,17 +75,18 @@ export function useBedActions() {
       qc.invalidateQueries({ queryKey: ["lots"] });
       toast({ title: "Bed assigned successfully" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const finish = useMutation({
-    mutationFn: ({ bedId, assignmentId }: { bedId: string; assignmentId: string }) =>
-      markBedFinished(bedId, assignmentId),
+    mutationFn: ({ bedId, assignmentId, finalWeight }: { bedId: string; assignmentId: string; finalWeight?: number }) =>
+      markBedFinished(bedId, assignmentId, finalWeight),
     onSuccess: () => {
       invalidate();
-      toast({ title: "Bed marked as finished" });
+      qc.invalidateQueries({ queryKey: ["lots"] });
+      toast({ title: "Bed marked as finished — parchment ready for grinding" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const maintenance = useMutation({
@@ -95,7 +96,7 @@ export function useBedActions() {
       invalidate();
       toast({ title: "Bed flagged for maintenance" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const removeMaint = useMutation({
@@ -104,7 +105,7 @@ export function useBedActions() {
       invalidate();
       toast({ title: "Maintenance removed" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   return { logAction, assign, finish, maintenance, removeMaint };

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { logAudit } from "@/services/auditService";
+import type { PlatformAuditLog } from "@/services/adminService";
 import { format } from "date-fns";
 import {
   ShieldCheck, Users, Building2, CheckCircle, XCircle, Clock,
@@ -30,47 +31,41 @@ type UserWithOrg = {
   created_at: string;
 };
 
+type TenantOrg = {
+  id: string;
+  name: string;
+  slug?: string;
+  subscription_status: "active" | "past_due" | "suspended";
+  monthly_rate: number;
+  next_billing_date?: string;
+  created_at?: string;
+  user_count?: number;
+};
+
 const SuperAdminDashboard = () => {
   const { signOut, user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<"pending" | "approved" | "all" | "audit">("pending");
+  const [tab, setTab] = useState<"pending" | "approved" | "subscriptions" | "all" | "audit">("pending");
   const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "reject" | "suspend" | "reactivate"; user: UserWithOrg } | null>(null);
+  const [confirmOrgAction, setConfirmOrgAction] = useState<{ type: "suspend" | "reactivate"; org: TenantOrg } | null>(null);
+
+  // Fetch all organizations with subscription info
+  const { data: tenantOrgs, isLoading: orgsLoading } = useQuery({
+    queryKey: ["super-admin-orgs"],
+    queryFn: async () => {
+      const { getAllPlatformOrgs } = await import("@/services/adminService");
+      return await getAllPlatformOrgs();
+    },
+  });
 
   // Fetch all profiles, orgs, roles
   const { data: allUsers, isLoading } = useQuery({
     queryKey: ["super-admin-users"],
     queryFn: async () => {
-      const { data: profiles, error: profErr } = await supabase
-        .from("profiles")
-        .select("user_id, name, email, is_approved, is_super_admin, organization_id, created_at");
-      if (profErr) throw profErr;
-
-      const { data: orgs, error: orgErr } = await supabase.from("organizations").select("id, name");
-      if (orgErr) throw orgErr;
-
-      const { data: roles, error: rolesErr } = await supabase.from("user_roles").select("user_id, role");
-      if (rolesErr) throw rolesErr;
-
-      const orgMap = new Map(orgs.map((o) => [o.id, o.name]));
-      const roleMap = new Map<string, string[]>();
-      roles.forEach((r) => {
-        if (!roleMap.has(r.user_id)) roleMap.set(r.user_id, []);
-        roleMap.get(r.user_id)!.push(r.role);
-      });
-
-      return profiles.map((p): UserWithOrg => ({
-        user_id: p.user_id,
-        name: p.name,
-        email: p.email ?? "",
-        is_approved: (p as any).is_approved ?? true,
-        is_super_admin: (p as any).is_super_admin ?? false,
-        organization_id: p.organization_id,
-        org_name: orgMap.get(p.organization_id) ?? "Unknown",
-        roles: roleMap.get(p.user_id) ?? [],
-        created_at: p.created_at,
-      }));
+      const { getAllPlatformUsers } = await import("@/services/adminService");
+      return await getAllPlatformUsers();
     },
   });
 
@@ -78,75 +73,75 @@ const SuperAdminDashboard = () => {
   const { data: auditLogs } = useQuery({
     queryKey: ["super-admin-audit"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("audit_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      if (error) throw error;
-
-      const userIds = [...new Set(data.map((l: any) => l.user_id))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, name, email")
-        .in("user_id", userIds);
-      const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) ?? []);
-
-      return data.map((log: any) => ({
-        ...log,
-        user_name: profileMap.get(log.user_id)?.name ?? "Unknown",
-      }));
+      const { getAllPlatformAuditLogs } = await import("@/services/adminService");
+      return await getAllPlatformAuditLogs();
     },
     enabled: tab === "audit",
   });
 
   const approveUser = useMutation({
     mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ is_approved: true } as any)
-        .eq("user_id", userId);
-      if (error) throw error;
-      await logAudit("approve_user", "user", userId);
+      const { approvePlatformUser } = await import("@/services/adminService");
+      await approvePlatformUser(userId);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super-admin-users"] });
+      qc.invalidateQueries({ queryKey: ["super-admin-orgs"] });
+      qc.invalidateQueries({ queryKey: ["super-admin-audit"] });
       toast({ title: "Farm owner approved successfully" });
       setConfirmAction(null);
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const rejectUser = useMutation({
     mutationFn: async (userId: string) => {
-      await logAudit("reject_user", "user", userId);
-      await supabase.from("user_roles").delete().eq("user_id", userId);
-      const { error } = await supabase.from("profiles").delete().eq("user_id", userId) as any;
-      if (error) throw error;
+      const { rejectPlatformUser } = await import("@/services/adminService");
+      await rejectPlatformUser(userId);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super-admin-users"] });
+      qc.invalidateQueries({ queryKey: ["super-admin-orgs"] });
+      qc.invalidateQueries({ queryKey: ["super-admin-audit"] });
       toast({ title: "User rejected and removed" });
       setConfirmAction(null);
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const suspendUser = useMutation({
     mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ is_approved: false } as any)
-        .eq("user_id", userId);
-      if (error) throw error;
-      await logAudit("suspend_user", "user", userId);
+      const { suspendPlatformUser } = await import("@/services/adminService");
+      await suspendPlatformUser(userId, false);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super-admin-users"] });
+      qc.invalidateQueries({ queryKey: ["super-admin-orgs"] });
+      qc.invalidateQueries({ queryKey: ["super-admin-audit"] });
       toast({ title: "Account suspended successfully" });
       setConfirmAction(null);
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateOrgSubscription = useMutation({
+    mutationFn: async ({ orgId, status }: { orgId: string; status: "active" | "suspended" }) => {
+      const { updateOrgSubscriptionStatus } = await import("@/services/adminService");
+      await updateOrgSubscriptionStatus(orgId, status);
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["super-admin-orgs"] });
+      qc.invalidateQueries({ queryKey: ["super-admin-users"] });
+      qc.invalidateQueries({ queryKey: ["super-admin-audit"] });
+      toast({
+        title: variables.status === "suspended" ? "Organization Suspended" : "Subscription Reactivated",
+        description: variables.status === "suspended"
+          ? "Users of this farm will be locked out until monthly payment is settled."
+          : "Full system access has been restored.",
+      });
+      setConfirmOrgAction(null);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const nonSuperUsers = allUsers?.filter((u) => !u.is_super_admin) ?? [];
@@ -225,8 +220,9 @@ const SuperAdminDashboard = () => {
         {/* Tabs */}
         <div className="flex gap-1 bg-muted/50 p-1 rounded-lg w-fit">
           {([
-            { key: "pending", label: "Pending", icon: Clock, count: pendingUsers.length },
-            { key: "approved", label: "Approved", icon: CheckCircle },
+            { key: "pending", label: "Pending Users", icon: Clock, count: pendingUsers.length },
+            { key: "approved", label: "Approved Users", icon: CheckCircle },
+            { key: "subscriptions", label: "Subscriptions & Billing", icon: Building2, count: tenantOrgs?.filter(o => o.subscription_status === "suspended").length },
             { key: "all", label: "All Users", icon: Users },
             { key: "audit", label: "Audit Log", icon: ClipboardList },
           ] as const).map((t) => (
@@ -241,7 +237,7 @@ const SuperAdminDashboard = () => {
             >
               <t.icon className="w-3.5 h-3.5" />
               {t.label}
-              {"count" in t && t.count! > 0 && (
+              {"count" in t && (t.count ?? 0) > 0 && (
                 <span className="ml-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
                   {t.count}
                 </span>
@@ -268,7 +264,7 @@ const SuperAdminDashboard = () => {
           <div className="bg-card rounded-xl card-shadow border border-border/50 overflow-hidden">
             {auditLogs && auditLogs.length > 0 ? (
               <div className="divide-y divide-border/50">
-                {auditLogs.map((log: any) => {
+                {auditLogs.map((log: PlatformAuditLog) => {
                   const meta = actionLabels[log.action] ?? { label: log.action, color: "bg-muted text-muted-foreground" };
                   return (
                     <div key={log.id} className="px-5 py-4 hover:bg-muted/20 transition-colors">
@@ -299,6 +295,110 @@ const SuperAdminDashboard = () => {
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-12">No audit logs yet</p>
+            )}
+          </div>
+        ) : tab === "subscriptions" ? (
+          <div className="bg-card rounded-xl card-shadow border border-border/50 overflow-hidden">
+            <div className="p-5 border-b border-border/50 flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-base font-semibold">Tenant Subscriptions & Access Control</h3>
+                <p className="text-xs text-muted-foreground">Manage recurring monthly SaaS fees and suspend delinquent accounts immediately</p>
+              </div>
+              <div className="text-xs px-2.5 py-1 rounded bg-muted font-medium text-muted-foreground">
+                Default Monthly Rate: 5,000 ETB / farm
+              </div>
+            </div>
+            {orgsLoading ? (
+              <p className="text-muted-foreground text-center py-12">Loading tenants...</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Farm / Organization</th>
+                      <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Monthly Rate (ETB)</th>
+                      <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Billing Cycle</th>
+                      <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">System Access</th>
+                      <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tenantOrgs && tenantOrgs.length > 0 ? (
+                      tenantOrgs.map((org) => {
+                        const isSuspended = org.subscription_status === "suspended";
+                        const isPastDue = org.subscription_status === "past_due";
+                        return (
+                          <tr key={org.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs ${
+                                  isSuspended ? "bg-destructive/15 text-destructive" : "bg-primary/10 text-primary"
+                                }`}>
+                                  <Building2 className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">{org.name}</p>
+                                  <p className="text-xs text-muted-foreground">ID: {org.id.slice(0, 8)}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className="text-sm font-mono font-medium">{(org.monthly_rate || 5000).toLocaleString()} ETB</span>
+                              <span className="text-[11px] text-muted-foreground block">per calendar month</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-xs text-muted-foreground">
+                              {org.next_billing_date
+                                ? `Due: ${format(new Date(org.next_billing_date), "MMM d, yyyy")}`
+                                : "Auto-renews monthly"}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              {isSuspended ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wide bg-destructive/15 text-destructive">
+                                  <XCircle className="w-3.5 h-3.5" /> Suspended
+                                </span>
+                              ) : isPastDue ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wide bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                  <Clock className="w-3.5 h-3.5" /> Past Due (Grace Period)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wide bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                                  <CheckCircle className="w-3.5 h-3.5" /> Active & Authorized
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 text-right">
+                              {isSuspended ? (
+                                <Button
+                                  size="sm"
+                                  onClick={() => setConfirmOrgAction({ type: "reactivate", org })}
+                                  className="gap-1.5 h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" /> Mark Paid / Reactivate
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => setConfirmOrgAction({ type: "suspend", org })}
+                                  className="gap-1.5 h-8 text-xs font-medium"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" /> Suspend System Access
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+                          No tenant organizations found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         ) : (
@@ -363,6 +463,7 @@ const SuperAdminDashboard = () => {
                                     <span key={r} className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide ${
                                       r === "owner" ? "bg-primary/15 text-primary" :
                                       r === "manager" ? "bg-accent text-accent-foreground" :
+                                      r === "addis_warehouse" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" :
                                       "bg-muted text-muted-foreground"
                                     }`}>{r}</span>
                                   ))}
@@ -411,7 +512,7 @@ const SuperAdminDashboard = () => {
         )}
       </main>
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation Dialog for User */}
       <AlertDialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -447,6 +548,40 @@ const SuperAdminDashboard = () => {
               {confirmAction?.type === "approve" ? "Approve" :
                confirmAction?.type === "suspend" ? "Suspend Account" :
                "Reject & Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmation Dialog for Organization Subscription */}
+      <AlertDialog open={!!confirmOrgAction} onOpenChange={() => setConfirmOrgAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif">
+              {confirmOrgAction?.type === "suspend"
+                ? "Suspend Farm System Access?"
+                : "Reactivate Farm Subscription?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmOrgAction?.type === "suspend"
+                ? `Are you sure you want to suspend access for ${confirmOrgAction.org.name}? All farmers and managers in this organization will be locked out until monthly billing is settled.`
+                : `Reactivate full system access for ${confirmOrgAction?.org.name}? System lockout will be removed immediately.`
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!confirmOrgAction) return;
+                updateOrgSubscription.mutate({
+                  orgId: confirmOrgAction.org.id,
+                  status: confirmOrgAction.type === "suspend" ? "suspended" : "active",
+                });
+              }}
+              className={confirmOrgAction?.type === "suspend" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "bg-primary text-primary-foreground"}
+            >
+              {confirmOrgAction?.type === "suspend" ? "Suspend Access" : "Reactivate"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

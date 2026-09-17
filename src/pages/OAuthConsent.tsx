@@ -9,6 +9,21 @@ type AuthDetails = {
   redirect_to?: string;
 };
 
+interface SupabaseOAuthApi {
+  getAuthorizationDetails: (id: string) => Promise<{
+    data?: { client?: { name?: string }; redirect_url?: string; redirect_to?: string } | null;
+    error?: { message: string } | null;
+  }>;
+  approveAuthorization: (id: string) => Promise<{
+    data?: { redirect_url?: string; redirect_to?: string } | null;
+    error?: { message: string } | null;
+  }>;
+  denyAuthorization: (id: string) => Promise<{
+    data?: { redirect_url?: string; redirect_to?: string } | null;
+    error?: { message: string } | null;
+  }>;
+}
+
 export default function OAuthConsent() {
   const [params] = useSearchParams();
   const authorizationId = params.get("authorization_id") ?? "";
@@ -26,7 +41,8 @@ export default function OAuthConsent() {
         window.location.href = "/auth?next=" + encodeURIComponent(next);
         return;
       }
-      const { data, error } = await (supabase.auth as any).oauth.getAuthorizationDetails(authorizationId);
+      const oauth = (supabase.auth as unknown as { oauth: SupabaseOAuthApi }).oauth;
+      const { data, error } = await oauth.getAuthorizationDetails(authorizationId);
       if (!active) return;
       if (error) return setError(error.message);
       const immediate = data?.redirect_url ?? data?.redirect_to;
@@ -34,7 +50,7 @@ export default function OAuthConsent() {
         window.location.href = immediate;
         return;
       }
-      setDetails(data);
+      setDetails(data ?? null);
     })();
     return () => {
       active = false;
@@ -43,7 +59,7 @@ export default function OAuthConsent() {
 
   async function decide(approve: boolean) {
     setBusy(true);
-    const oauth = (supabase.auth as any).oauth;
+    const oauth = (supabase.auth as unknown as { oauth: SupabaseOAuthApi }).oauth;
     const { data, error } = approve
       ? await oauth.approveAuthorization(authorizationId)
       : await oauth.denyAuthorization(authorizationId);

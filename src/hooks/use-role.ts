@@ -5,36 +5,42 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type AppRole = Database["public"]["Enums"]["app_role"];
 
-// Role hierarchy: owner > manager > supervisor > worker
+// Role hierarchy: super_admin > owner > manager > addis_warehouse > supervisor > worker
 const ROLE_HIERARCHY: Record<AppRole, number> = {
+  super_admin: 5,
   owner: 4,
   manager: 3,
+  addis_warehouse: 3,
   supervisor: 2,
   worker: 1,
 };
 
 // Role display labels
 export const ROLE_LABELS: Record<AppRole, string> = {
-  owner: "Admin",
-  manager: "Manager",
+  super_admin: "Super Admin",
+  owner: "Farm Owner / Admin",
+  manager: "Operations Manager",
+  addis_warehouse: "Addis Ababa Logistics Hub",
   supervisor: "Site Owner",
-  worker: "Worker",
+  worker: "Field Worker",
 };
 
 // Define which routes each role can access
 const ROUTE_PERMISSIONS: Record<string, AppRole[]> = {
-  "/": ["owner", "manager", "supervisor", "worker"],
-  "/sites": ["owner", "manager", "supervisor"],
-  "/beds": ["owner", "manager", "supervisor", "worker"],
-  "/warehouse": ["owner", "manager"],
-  "/grinding": ["owner", "manager"],
-  "/shipments": ["owner", "manager"],
-  "/workers": ["owner", "manager"],
-  "/payroll": ["owner", "manager"],
-  "/inventory": ["owner", "manager"],
-  "/reports": ["owner", "manager", "supervisor"],
-  "/audit-log": ["owner"],
-  "/settings": ["owner"],
+  "/": ["super_admin", "owner", "manager", "supervisor", "worker", "addis_warehouse"],
+  "/hub-inventory": ["super_admin", "owner", "manager", "addis_warehouse"],
+  "/sites": ["super_admin", "owner", "manager", "supervisor"],
+  "/beds": ["super_admin", "owner", "manager", "supervisor", "worker"],
+  "/warehouse": ["super_admin", "owner", "manager"],
+  "/grinding": ["super_admin", "owner", "manager"],
+  "/shipments": ["super_admin", "owner", "manager", "addis_warehouse"],
+  "/workers": ["super_admin", "owner", "manager"],
+  "/payroll": ["super_admin", "owner", "manager"],
+  "/inventory": ["super_admin", "owner", "manager"],
+  "/reports": ["super_admin", "owner", "manager", "supervisor", "addis_warehouse"],
+  "/audit-log": ["super_admin", "owner"],
+  "/settings": ["super_admin", "owner"],
+  "/super-admin": ["super_admin"],
 };
 
 export function useRole() {
@@ -43,13 +49,31 @@ export function useRole() {
   const { data: roles, isLoading } = useQuery({
     queryKey: ["my-roles", user?.id],
     queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
+      if (!user) return [] as AppRole[];
+
+      // 1. Fetch assigned roles
+      const { data: roleRows, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id);
-      if (error) throw error;
-      return data.map((r) => r.role);
+
+      if (roleError) {
+        throw roleError;
+      }
+
+      // 2. Check platform super admin status
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_super_admin")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const rolesList: AppRole[] = (roleRows || []).map((r) => r.role);
+      if (profile?.is_super_admin && !rolesList.includes("super_admin")) {
+        rolesList.push("super_admin");
+      }
+
+      return rolesList;
     },
     enabled: !!user,
   });
@@ -74,10 +98,12 @@ export function useRole() {
     return userRoles.some((r) => allowed.includes(r));
   };
 
-  const isOwner = hasRole("owner");
-  const isManager = hasRole("manager");
+  const isSuperAdmin = hasRole("super_admin") || userRoles.includes("super_admin" as AppRole);
+  const isOwner = hasRole("owner") || isSuperAdmin;
+  const isManager = hasRole("manager") || isOwner;
+  const isAddisWarehouse = hasRole("addis_warehouse");
   const isSupervisor = hasRole("supervisor");
-  const isWorker = hasRole("worker") && !isOwner && !isManager && !isSupervisor;
+  const isWorker = hasRole("worker") && !isOwner && !isManager && !isSupervisor && !isAddisWarehouse;
 
   return {
     roles: userRoles,
@@ -86,8 +112,10 @@ export function useRole() {
     hasRole,
     hasMinRole,
     canAccessRoute,
+    isSuperAdmin,
     isOwner,
     isManager,
+    isAddisWarehouse,
     isSupervisor,
     isWorker,
     ROUTE_PERMISSIONS,

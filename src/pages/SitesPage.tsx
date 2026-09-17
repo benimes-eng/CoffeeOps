@@ -13,7 +13,8 @@ import { useRole } from "@/hooks/use-role";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Site = Tables<"sites">;
-type Block = Tables<"blocks"> & { beds_count?: number; occupied_count?: number; maintenance_count?: number; beds?: any[] };
+type Bed = Tables<"beds">;
+type Block = Tables<"blocks"> & { beds_count?: number; occupied_count?: number; maintenance_count?: number; beds?: Bed[] };
 
 const SitesPage = () => {
   const { toast } = useToast();
@@ -25,16 +26,19 @@ const SitesPage = () => {
   // Dialogs
   const [showNewSite, setShowNewSite] = useState(false);
   const [showNewBlock, setShowNewBlock] = useState(false);
+  const [showEditBlock, setShowEditBlock] = useState<Block | null>(null);
+  const [showDeleteBlock, setShowDeleteBlock] = useState<Block | null>(null);
   const [showNewBed, setShowNewBed] = useState(false);
   const [showEditSite, setShowEditSite] = useState<Site | null>(null);
   const [showDeleteSite, setShowDeleteSite] = useState<Site | null>(null);
-  const [showEditBed, setShowEditBed] = useState<any>(null);
-  const [showDeleteBed, setShowDeleteBed] = useState<any>(null);
+  const [showEditBed, setShowEditBed] = useState<Bed | null>(null);
+  const [showDeleteBed, setShowDeleteBed] = useState<Bed | null>(null);
 
   // Form state
   const [newSiteName, setNewSiteName] = useState("");
   const [newSiteLocation, setNewSiteLocation] = useState("");
   const [newBlockName, setNewBlockName] = useState("");
+  const [editBlockName, setEditBlockName] = useState("");
   const [bedPrefix, setBedPrefix] = useState("");
   const [bedCount, setBedCount] = useState("1");
   const [bedStartNum, setBedStartNum] = useState("1");
@@ -49,13 +53,17 @@ const SitesPage = () => {
   const [editBedMaterial, setEditBedMaterial] = useState("");
 
   const { data: sites } = useQuery({
-    queryKey: ["sites"],
+    queryKey: ["sites", orgId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sites").select("*").order("name");
+      const query = supabase.from("sites").select("*").order("name");
+      if (orgId) query.eq("organization_id", orgId);
+      const { data, error } = await query;
       if (error) throw error;
       return data as Site[];
     },
+    enabled: !!orgId,
   });
+
 
   const selectedSite = sites?.find((s) => s.id === selectedSiteId) || sites?.[0];
 
@@ -89,7 +97,7 @@ const SitesPage = () => {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sites"] }); toast({ title: "Site created" }); setShowNewSite(false); setNewSiteName(""); setNewSiteLocation(""); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const editSite = useMutation({
@@ -99,7 +107,7 @@ const SitesPage = () => {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sites"] }); toast({ title: "Site updated" }); setShowEditSite(null); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const deleteSite = useMutation({
@@ -109,8 +117,9 @@ const SitesPage = () => {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sites"] }); toast({ title: "Site deleted" }); setShowDeleteSite(null); setSelectedSiteId(null); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
 
   const createBlock = useMutation({
     mutationFn: async () => {
@@ -119,7 +128,27 @@ const SitesPage = () => {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["site-blocks"] }); toast({ title: "Block created" }); setShowNewBlock(false); setNewBlockName(""); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateBlock = useMutation({
+    mutationFn: async () => {
+      if (!showEditBlock || !editBlockName.trim()) throw new Error("Block name is required");
+      const { error } = await supabase.from("blocks").update({ name: editBlockName.trim() }).eq("id", showEditBlock.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["site-blocks"] }); toast({ title: "Block updated" }); setShowEditBlock(null); setEditBlockName(""); },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteBlock = useMutation({
+    mutationFn: async () => {
+      if (!showDeleteBlock) throw new Error("No block selected");
+      const { error } = await supabase.from("blocks").delete().eq("id", showDeleteBlock.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["site-blocks"] }); toast({ title: "Block deleted" }); setShowDeleteBlock(null); },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const createBeds = useMutation({
@@ -138,7 +167,7 @@ const SitesPage = () => {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["site-blocks"] }); qc.invalidateQueries({ queryKey: ["beds"] }); toast({ title: "Beds created" }); closeBedDialog(); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const updateBed = useMutation({
@@ -152,7 +181,7 @@ const SitesPage = () => {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["site-blocks"] }); toast({ title: "Bed updated" }); setShowEditBed(null); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const deleteBed = useMutation({
@@ -162,7 +191,7 @@ const SitesPage = () => {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["site-blocks"] }); qc.invalidateQueries({ queryKey: ["beds"] }); toast({ title: "Bed deleted" }); setShowDeleteBed(null); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const closeBedDialog = () => {
@@ -241,8 +270,35 @@ const SitesPage = () => {
                     return (
                       <div key={block.id} className="bg-card rounded-xl p-5 card-shadow border border-border/50">
                         <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-serif text-lg">{block.name}</h4>
-                          <span className="text-xs font-mono text-muted-foreground">{block.beds_count} beds</span>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-sans font-bold text-base text-foreground">{block.name}</h4>
+                            <span className="text-xs font-mono text-muted-foreground">({block.beds_count} beds)</span>
+                          </div>
+                          {isOwner && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                onClick={() => {
+                                  setShowEditBlock(block);
+                                  setEditBlockName(block.name);
+                                }}
+                                title="Edit Block"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                onClick={() => setShowDeleteBlock(block)}
+                                title="Delete Block"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                         <div className="space-y-2 mb-4">
                           <div className="flex justify-between text-sm"><span className="text-muted-foreground">Occupied</span><span className="font-medium">{block.occupied_count}</span></div>
@@ -255,7 +311,7 @@ const SitesPage = () => {
                           <div className="border-t border-border/50 pt-3">
                             <p className="text-xs font-semibold text-muted-foreground mb-2">Beds</p>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                              {block.beds.map((bed: any) => (
+                              {block.beds.map((bed: Bed) => (
                                 <div key={bed.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2 text-sm group/bed">
                                   <span className="font-mono text-xs">{bed.bed_number}</span>
                                   {isOwner && (
@@ -334,7 +390,7 @@ const SitesPage = () => {
       {/* New Block Dialog */}
       <Dialog open={showNewBlock} onOpenChange={setShowNewBlock}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle className="font-serif">New Block</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-sans font-bold text-lg">New Block</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2"><Label>Block Name</Label><Input placeholder="e.g. Block A" value={newBlockName} onChange={(e) => setNewBlockName(e.target.value)} /></div>
             <p className="text-sm text-muted-foreground">Adding to: {selectedSite?.name}</p>
@@ -345,6 +401,34 @@ const SitesPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Block Dialog */}
+      <Dialog open={!!showEditBlock} onOpenChange={(v) => { if (!v) setShowEditBlock(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle className="font-sans font-bold text-lg">Edit Block</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2"><Label>Block Name</Label><Input value={editBlockName} onChange={(e) => setEditBlockName(e.target.value)} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditBlock(null)}>Cancel</Button>
+            <Button onClick={() => updateBlock.mutate()} disabled={updateBlock.isPending}>{updateBlock.isPending ? "Saving..." : "Save Block"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Block Confirmation */}
+      <AlertDialog open={!!showDeleteBlock} onOpenChange={(v) => { if (!v) setShowDeleteBlock(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Block</AlertDialogTitle>
+            <AlertDialogDescription>Are you sure you want to delete block "{showDeleteBlock?.name}"? All associated drying beds will also be deleted.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteBlock.mutate()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete Block</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Bulk Bed Creation Dialog */}
       <Dialog open={showNewBed} onOpenChange={(v) => !v && closeBedDialog()}>

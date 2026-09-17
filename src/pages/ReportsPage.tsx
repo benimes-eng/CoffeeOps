@@ -54,7 +54,11 @@ const ReportsPage = () => {
   const handleExport = async (
     reportKey: string,
     format: "pdf" | "csv",
-    fetcher: (filters: any) => Promise<any>,
+    fetcher: (filters: { orgId: string; dateRange: DateRange; siteId?: string }) => Promise<{
+      rows: Record<string, unknown>[];
+      headers: string[];
+      summary?: Record<string, unknown>;
+    }>,
     title: string
   ) => {
     if (!orgId) {
@@ -76,13 +80,14 @@ const ReportsPage = () => {
       if (format === "csv") {
         exportCSV(title, result.headers, result.rows);
       } else {
-        exportPDF(title, result.headers, result.rows, result.summary, orgName ?? undefined);
+        await exportPDF(title, result.headers, result.rows, result.summary, orgName ?? undefined);
       }
 
       toast.success(`${title} exported as ${format.toUpperCase()}`);
-    } catch (err: any) {
-      console.error(err);
-      toast.error(`Export failed: ${err.message}`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      console.error(e);
+      toast.error(`Export failed: ${e.message}`);
     } finally {
       setExporting(null);
     }

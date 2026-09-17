@@ -5,7 +5,7 @@ import { supabaseForUser } from "../supabase";
 export default defineTool({
   name: "list_workers",
   title: "List workers",
-  description: "List farm workers with role, status and wage information.",
+  description: "List farm workers with name, role and active operational status.",
   inputSchema: {
     status: z.string().optional().describe("Optional worker status filter, e.g. active."),
     limit: z.number().int().optional().describe("Max workers to return (default 100)."),
@@ -16,7 +16,7 @@ export default defineTool({
     const supabase = supabaseForUser(ctx);
     let query = supabase
       .from("workers")
-      .select("id, name, role, status, wage_rate, wage_type")
+      .select("id, name, role, status")
       .order("name")
       .limit(Math.min(Math.max(limit ?? 100, 1), 300));
     if (status) query = query.eq("status", status as never);
@@ -25,4 +25,5 @@ export default defineTool({
       ? { content: [{ type: "text", text: error.message }], isError: true }
       : { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: { workers: data ?? [] } };
   },
+
 });

@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { ClipboardList, User, Calendar } from "lucide-react";
 import { format } from "date-fns";
+
+export type AuditLogRow = Tables<"audit_logs"> & { user_name: string };
 
 const actionLabels: Record<string, { label: string; color: string }> = {
   create: { label: "Created", color: "bg-success/10 text-success" },
@@ -20,7 +23,7 @@ const actionLabels: Record<string, { label: string; color: string }> = {
 };
 
 const AuditLogPage = () => {
-  const { data: logs, isLoading } = useQuery({
+  const { data: logs, isLoading } = useQuery<AuditLogRow[]>({
     queryKey: ["audit-logs"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -31,14 +34,14 @@ const AuditLogPage = () => {
       if (error) throw error;
 
       // Fetch profile names for user_ids
-      const userIds = [...new Set(data.map((l: any) => l.user_id))];
+      const userIds = [...new Set((data || []).map((l) => l.user_id))];
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id, name, email")
         .in("user_id", userIds);
 
       const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) ?? []);
-      return data.map((log: any) => ({
+      return (data || []).map((log) => ({
         ...log,
         user_name: profileMap.get(log.user_id)?.name ?? profileMap.get(log.user_id)?.email ?? "Unknown",
       }));
@@ -57,7 +60,7 @@ const AuditLogPage = () => {
           <p className="text-muted-foreground text-center py-12">Loading audit logs...</p>
         ) : logs && logs.length > 0 ? (
           <div className="divide-y divide-border/50">
-            {logs.map((log: any) => {
+            {logs.map((log) => {
               const actionMeta = actionLabels[log.action] ?? { label: log.action, color: "bg-muted text-muted-foreground" };
               const details = log.details as Record<string, unknown> | null;
               return (

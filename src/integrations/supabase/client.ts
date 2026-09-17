@@ -9,9 +9,14 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// In local browser development (outside Lovable iframe), use localStorage directly so auth doesn't hang.
+const authStorage = typeof window !== 'undefined' && (!window.parent || window.parent === window)
+  ? window.localStorage
+  : brokeredPreviewStorage();
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: brokeredPreviewStorage(),
+    storage: authStorage,
     persistSession: true,
     autoRefreshToken: true,
   }
