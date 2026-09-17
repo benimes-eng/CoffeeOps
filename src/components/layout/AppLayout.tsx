@@ -26,14 +26,28 @@ const navItems = [
   { title: "Platform Super Admin", path: "/super-admin", icon: Shield },
 ];
 
-export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+export function AppSidebar({
+  collapsed,
+  mobileOpen,
+  onToggle,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  mobileOpen: boolean;
+  onToggle: () => void;
+  onNavigate: () => void;
+}) {
   const location = useLocation();
   const { canAccessRoute } = useRole();
 
   const filteredNav = navItems.filter((item) => canAccessRoute(item.path));
 
   return (
-    <aside className={`fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground z-40 transition-all duration-200 flex flex-col border-r border-sidebar-border ${collapsed ? "w-[68px]" : "w-64"}`}>
+    <aside
+      className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[calc(100vw-3rem)] -translate-x-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-200 lg:max-w-none lg:translate-x-0 ${
+        mobileOpen ? "translate-x-0" : ""
+      } ${collapsed ? "lg:w-[68px]" : "lg:w-64"}`}
+    >
       {/* Brand Header */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border bg-sidebar/50">
         <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
@@ -58,6 +72,7 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
             <Link
               key={item.path}
               to={item.path}
+              onClick={onNavigate}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 group ${
                 isActive
                   ? "bg-emerald-600 text-white shadow-sm font-semibold"
@@ -72,7 +87,7 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
       </nav>
 
       {/* Collapse Action */}
-      <button onClick={onToggle} className="flex items-center justify-center h-12 border-t border-sidebar-border text-sidebar-muted hover:text-sidebar-foreground transition-colors">
+      <button onClick={onToggle} className="hidden lg:flex items-center justify-center h-12 border-t border-sidebar-border text-sidebar-muted hover:text-sidebar-foreground transition-colors">
         <ChevronLeft className={`w-4 h-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
       </button>
     </aside>
@@ -133,7 +148,7 @@ function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 bg-card rounded-lg border border-border shadow-lg z-50 max-h-96 overflow-hidden">
+          <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-80 bg-card rounded-lg border border-border shadow-lg z-50 max-h-96 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-slate-50/50 dark:bg-slate-900/50">
               <h4 className="font-semibold text-xs tracking-wider uppercase text-slate-500">Notifications</h4>
               {unread > 0 && (
@@ -184,15 +199,16 @@ export function AppHeader({ sidebarCollapsed, onToggleSidebar }: { sidebarCollap
   const initials = user?.email?.slice(0, 2).toUpperCase() || "OP";
 
   return (
-    <header className="h-16 bg-card border-b border-border/80 flex items-center justify-between px-6 sticky top-0 z-30 shadow-sm">
-      <div className="flex items-center gap-4">
+    <header className="h-16 bg-card border-b border-border/80 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30 shadow-sm">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         <button onClick={onToggleSidebar} className="lg:hidden p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">
           <Menu className="w-5 h-5" />
         </button>
-        <div className="flex items-center gap-3">
-          <div>
-            <h2 className="font-sans font-bold text-base text-foreground tracking-tight">Specialty Coffee Supply Chain Operations</h2>
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="min-w-0">
+          <p className="sm:hidden font-sans font-bold text-sm text-foreground tracking-tight">CoffeeOps</p>
+          <div className="hidden sm:block">
+            <h2 className="font-sans font-bold text-sm lg:text-base text-foreground tracking-tight truncate max-w-[220px] md:max-w-[360px] xl:max-w-none">Specialty Coffee Supply Chain Operations</h2>
+            <div className="hidden md:flex items-center gap-2 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Live Washing Station Telemetry
@@ -200,13 +216,13 @@ export function AppHeader({ sidebarCollapsed, onToggleSidebar }: { sidebarCollap
               <span>•</span>
               <span className="font-mono">Ethiopia Origin Nodes</span>
             </div>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-shrink-0 items-center gap-1 sm:gap-3">
         <NotificationBell />
         {highestRole && (
-          <span className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded border font-semibold tracking-wide ${roleBadgeColor[highestRole] || "bg-muted text-muted-foreground"}`}>
+          <span className={`hidden md:inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded border font-semibold tracking-wide ${roleBadgeColor[highestRole] || "bg-muted text-muted-foreground"}`}>
             <Shield className="w-3 h-3" />
             {ROLE_LABELS[highestRole]}
           </span>
@@ -230,13 +246,27 @@ export function AppHeader({ sidebarCollapsed, onToggleSidebar }: { sidebarCollap
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
-      <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
-      <div className={`transition-all duration-200 ${collapsed ? "ml-[68px]" : "ml-64"}`}>
-        <AppHeader sidebarCollapsed={collapsed} onToggleSidebar={() => setCollapsed(!collapsed)} />
-        <main className="p-6 max-w-7xl mx-auto">{children}</main>
+      <AppSidebar
+        collapsed={collapsed}
+        mobileOpen={mobileOpen}
+        onToggle={() => setCollapsed(!collapsed)}
+        onNavigate={() => setMobileOpen(false)}
+      />
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="fixed inset-0 z-30 bg-slate-950/50 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+      <div className={`ml-0 transition-all duration-200 ${collapsed ? "lg:ml-[68px]" : "lg:ml-64"}`}>
+        <AppHeader sidebarCollapsed={collapsed} onToggleSidebar={() => setMobileOpen(true)} />
+        <main className="max-w-7xl mx-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );
