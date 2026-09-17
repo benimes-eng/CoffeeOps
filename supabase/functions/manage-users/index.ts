@@ -13,7 +13,8 @@ function corsHeaders(req: Request) {
     .map((value) => value.trim())
     .filter(Boolean);
 
-  if (!origin || !allowedOrigins.includes(origin)) return null;
+  const isCoffeeOpsWorker = /^https:\/\/coffeeops\.[a-z0-9-]+\.workers\.dev$/i.test(origin || "");
+  if (!origin || (!allowedOrigins.includes(origin) && !isCoffeeOpsWorker)) return null;
   return { ...baseCorsHeaders, "Access-Control-Allow-Origin": origin, Vary: "Origin" };
 }
 
