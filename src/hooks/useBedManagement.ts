@@ -3,7 +3,6 @@ import {
   fetchBedsWithDetails,
   fetchSites,
   fetchBlocks,
-  fetchLots,
   fetchBedActivityLogs,
   logBedAction,
   assignLotToBed,
@@ -31,12 +30,8 @@ export function useBeds(siteId?: string, blockId?: string) {
   });
 }
 
-export function useLots(status?: string) {
-  return useQuery({
-    queryKey: ["lots", status],
-    queryFn: () => fetchLots(status),
-  });
-}
+export { useLots } from "@/hooks/useLots";
+
 
 export function useBedActivityLogs(bedId?: string) {
   return useQuery({
