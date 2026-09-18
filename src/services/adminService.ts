@@ -40,20 +40,27 @@ async function callManageUsersFunction(action: string, payload: Record<string, u
     throw new Error("UNAUTHORIZED: Active authenticated session required");
   }
 
-  const res = await supabase.functions.invoke("manage-users", {
-    body: { action, ...payload },
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
-
-  if (res.error) {
-    throw new Error(res.error.message || "Failed to execute administrative operation");
+  // Use fetch rather than functions.invoke so an Edge Function status/body is
+  // preserved for the operator. The SDK otherwise reduces CORS/network and
+  // non-2xx responses to the unhelpful "Failed to send a request" message.
+  let response: Response;
+  try {
+    response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      body: JSON.stringify({ action, ...payload }),
+    });
+  } catch {
+    throw new Error("Could not reach the administrator service. Check your connection and try again.");
   }
 
-  const responseData = res.data;
-  if (responseData?.error) {
-    throw new Error(responseData.error);
+  const responseData = await response.json().catch(() => ({}));
+  if (!response.ok || responseData?.error) {
+    throw new Error(responseData?.error || `Administrative operation failed (${response.status})`);
   }
 
   return responseData;

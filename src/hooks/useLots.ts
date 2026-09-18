@@ -28,7 +28,14 @@ export function useCreateLot() {
   return useMutation({
     mutationFn: (input: LotIntakeInput) => createLotIntake(input),
     onSuccess: (data: Lot) => {
-      qc.invalidateQueries({ queryKey: LOTS_QUERY_KEY });
+      // Show the server-returned lot immediately, then reconcile every active
+      // lot query. This avoids a successful intake disappearing while a
+      // refetch is in flight or a browser cache is stale.
+      qc.setQueryData<Lot[]>([...LOTS_QUERY_KEY, "all"], (current = []) => [
+        data,
+        ...current.filter((lot) => lot.id !== data.id),
+      ]);
+      void qc.invalidateQueries({ queryKey: LOTS_QUERY_KEY, refetchType: "active" });
       toast({
         title: "Cherry Intake Registered",
         description: `Lot ${data.lot_number} created successfully. Next: Assign to drying bed.`,
@@ -68,4 +75,3 @@ export function useMergeLots() {
     },
   });
 }
-
