@@ -1,3 +1,4 @@
+import { ResetModuleButton } from "@/components/common/ResetModuleButton";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -249,7 +250,8 @@ const AddisHubPage = () => {
             Receive incoming coffee consignments from washing stations, manage dry port inventory, and dispatch export containers to Djibouti Port
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <ResetModuleButton module="addis_hub" moduleLabel="Addis Hub" />
           <Button
             onClick={() => setShowDjiboutiModal(true)}
             className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"

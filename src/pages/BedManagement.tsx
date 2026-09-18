@@ -1,3 +1,4 @@
+import { ResetModuleButton } from "@/components/common/ResetModuleButton";
 import { useState, useMemo } from "react";
 import { useSites, useBlocks, useBeds, useBedActions } from "@/hooks/useBedManagement";
 import { BedWithDetails, getBedStatusColor, getDryingDays } from "@/services/bedService";
@@ -122,6 +123,7 @@ const BedManagement = () => {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
+          <ResetModuleButton module="beds" moduleLabel="Beds" />
           <Button onClick={() => setShowAssignment(true)} className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs h-9 shadow-sm">
             <Plus className="w-4 h-4" /> Stage Coffee Lot
           </Button>

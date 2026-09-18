@@ -1,3 +1,4 @@
+import { ResetModuleButton } from "@/components/common/ResetModuleButton";
 import { useState } from "react";
 import { Plus, Users, Pencil, Trash2, Clock, Calendar, CheckCircle2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -165,6 +166,7 @@ const WorkersPage = () => {
           <p className="text-muted-foreground mt-1">Manage farm personnel, log work activities, and track daily operational hours</p>
         </div>
         <div className="flex items-center gap-2">
+          <ResetModuleButton module="payroll" moduleLabel="Work Logs" />
           {canManage && (
             <>
               <Button variant="outline" onClick={() => setShowLogWork(true)} className="gap-2">

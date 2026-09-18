@@ -3,14 +3,18 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useGrindingBatches, useStartGrinding, useCompleteGrinding, GrindingBatchWithLot } from "@/hooks/useGrinding";
 import { useLots, LOTS_QUERY_KEY } from "@/hooks/useLots";
 import { calculateYield, createDirectDriedLot } from "@/services/grindingService";
+import { deleteGrindingBatch } from "@/services/dataManagementService";
+import { ResetModuleButton } from "@/components/common/ResetModuleButton";
+import { useRole } from "@/hooks/use-role";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Coffee, CheckCircle2, Package, AlertTriangle, ArrowRight, Plus } from "lucide-react";
+import { Coffee, CheckCircle2, Package, AlertTriangle, ArrowRight, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ETHIOPIAN_REGIONS = [
@@ -28,6 +32,7 @@ const statusBadge: Record<string, string> = {
 const GrindingPage = () => {
   const [showComplete, setShowComplete] = useState<string | null>(null);
   const [groundWeight, setGroundWeight] = useState("");
+  const [showDeleteBatch, setShowDeleteBatch] = useState<{ id: string; lotNumber: string } | null>(null);
 
   // --- Direct Dried Coffee Intake ---
   const [showDirectIntake, setShowDirectIntake] = useState(false);
@@ -38,6 +43,19 @@ const GrindingPage = () => {
 
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { hasMinRole } = useRole();
+  const canDelete = hasMinRole("manager");
+
+  const deleteGrindingBatchMutation = useMutation({
+    mutationFn: (batchId: string) => deleteGrindingBatch(batchId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["grinding-batches"] });
+      qc.invalidateQueries({ queryKey: LOTS_QUERY_KEY });
+      toast({ title: "Batch deleted", description: "Grinding batch permanently removed." });
+      setShowDeleteBatch(null);
+    },
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
 
   const addDirectDriedLot = useMutation({
     mutationFn: () =>
@@ -116,13 +134,16 @@ const GrindingPage = () => {
             Parchment hulling, clean green output verification, and yield calculations
           </p>
         </div>
-        <Button
-          onClick={() => setShowDirectIntake(true)}
-          className="gap-2 shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          Add Purchased Dried Coffee
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <ResetModuleButton module="grinding" moduleLabel="Grinding" />
+          <Button
+            onClick={() => setShowDirectIntake(true)}
+            className="gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Purchased Dried Coffee
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -244,7 +265,7 @@ const GrindingPage = () => {
                           {batch.status}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-right">
+                      <td className="px-5 py-3.5 text-right space-x-2">
                         {batch.status === "grinding" && (
                           <Button
                             size="sm"
@@ -255,6 +276,16 @@ const GrindingPage = () => {
                             }}
                           >
                             Complete Milling
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1.5 h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setShowDeleteBatch({ id: batch.id, lotNumber: batch.lot?.lot_number || batch.id.slice(0, 8) })}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
                       </td>
@@ -272,6 +303,28 @@ const GrindingPage = () => {
           </table>
         </div>
       </div>
+
+      {/* Delete Batch Confirmation */}
+      <AlertDialog open={!!showDeleteBatch} onOpenChange={(v) => { if (!v) setShowDeleteBatch(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Grinding Batch for Lot {showDeleteBatch?.lotNumber}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this milling batch record. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => showDeleteBatch && deleteGrindingBatchMutation.mutate(showDeleteBatch.id)}
+              disabled={deleteGrindingBatchMutation.isPending}
+            >
+              {deleteGrindingBatchMutation.isPending ? "Deleting..." : "Delete Batch"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Complete Grinding Dialog */}
       <Dialog

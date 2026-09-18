@@ -1,7 +1,12 @@
 import { useState } from "react";
-import { Plus, Package, Truck, Clock, Archive, Merge, Coffee, Eye, Filter, Info } from "lucide-react";
-import { useLots, useCreateLot, useMergeLots } from "@/hooks/useLots";
+import { Plus, Package, Truck, Clock, Archive, Merge, Coffee, Eye, Filter, Info, Trash2 } from "lucide-react";
+import { useLots, useCreateLot, useMergeLots, LOTS_QUERY_KEY } from "@/hooks/useLots";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { deleteLot } from "@/services/dataManagementService";
+import { ResetModuleButton } from "@/components/common/ResetModuleButton";
+import { useRole } from "@/hooks/use-role";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +16,7 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { LotDetailModal } from "@/components/lots/LotDetailModal";
 import { ETHIOPIAN_COFFEE_REGIONS } from "@/validation/schemas";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 const statusBadge: Record<string, string> = {
   received: "bg-blue-500/10 text-blue-700 border-blue-200",
@@ -38,6 +44,7 @@ const WarehousePage = () => {
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showDeleteLot, setShowDeleteLot] = useState<{ id: string; lot_number: string } | null>(null);
 
   // Intake Form fields
   const [region, setRegion] = useState<string>("Yirgacheffe");
@@ -53,6 +60,20 @@ const WarehousePage = () => {
   const { data: lots, isLoading } = useLots();
   const createLot = useCreateLot();
   const mergeLots = useMergeLots();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { hasMinRole } = useRole();
+  const canDelete = hasMinRole("manager");
+
+  const deleteLotMutation = useMutation({
+    mutationFn: (lotId: string) => deleteLot(lotId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: LOTS_QUERY_KEY });
+      toast({ title: "Lot deleted", description: "Coffee lot has been permanently removed." });
+      setShowDeleteLot(null);
+    },
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
 
   const handleCreateIntake = () => {
     const finalRegion = region === "Other" ? customRegion.trim() : region;
@@ -128,6 +149,7 @@ const WarehousePage = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ResetModuleButton module="warehouse" moduleLabel="Warehouse" />
           <Button
             variant="outline"
             onClick={() => setShowMerge(true)}
@@ -256,6 +278,16 @@ const WarehousePage = () => {
                       >
                         <Eye className="w-3.5 h-3.5" /> Timeline
                       </Button>
+                      {canDelete && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1.5 h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setShowDeleteLot({ id: lot.id, lot_number: lot.lot_number })}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -277,6 +309,28 @@ const WarehousePage = () => {
         open={!!selectedLotId}
         onClose={() => setSelectedLotId(null)}
       />
+
+      {/* Delete Lot Confirmation */}
+      <AlertDialog open={!!showDeleteLot} onOpenChange={(v) => { if (!v) setShowDeleteLot(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Lot {showDeleteLot?.lot_number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this coffee lot and all its associated bed assignments, grinding batches, and shipments. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => showDeleteLot && deleteLotMutation.mutate(showDeleteLot.id)}
+              disabled={deleteLotMutation.isPending}
+            >
+              {deleteLotMutation.isPending ? "Deleting..." : "Delete Lot"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Intake Dialog */}
       <Dialog open={showIntake} onOpenChange={setShowIntake}>

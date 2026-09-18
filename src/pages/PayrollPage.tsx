@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { DollarSign, Check, Plus, Calendar, Calculator, Clock } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { DollarSign, Check, Plus, Calendar, Calculator, Clock, Trash2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   usePayroll,
@@ -9,11 +9,16 @@ import {
   useTogglePayrollApproval,
 } from "@/hooks/usePayroll";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { deletePayroll } from "@/services/dataManagementService";
+import { ResetModuleButton } from "@/components/common/ResetModuleButton";
+import { useRole } from "@/hooks/use-role";
+import { useToast } from "@/hooks/use-toast";
 import { format, subDays } from "date-fns";
 
 const PayrollPage = () => {
@@ -21,10 +26,25 @@ const PayrollPage = () => {
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [periodStart, setPeriodStart] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [periodEnd, setPeriodEnd] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [showDeletePayroll, setShowDeletePayroll] = useState<{ id: string; workerName: string } | null>(null);
 
   const { data: payrolls, isLoading } = usePayroll();
   const generatePayroll = useGeneratePayroll();
   const toggleApproval = useTogglePayrollApproval();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { hasMinRole } = useRole();
+  const canDelete = hasMinRole("manager");
+
+  const deletePayrollMutation = useMutation({
+    mutationFn: (payrollId: string) => deletePayroll(payrollId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payroll"] });
+      toast({ title: "Payroll entry deleted", description: "Payroll record permanently removed." });
+      setShowDeletePayroll(null);
+    },
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
 
   const { data: workers } = useQuery({
     queryKey: ["workers-active"],
@@ -69,9 +89,12 @@ const PayrollPage = () => {
             Automated wage computation derived authoritatively from daily work logs (ETB)
           </p>
         </div>
-        <Button onClick={() => setShowGenerate(true)} className="gap-2">
-          <Calculator className="w-4 h-4" /> Compute & Generate Period Payroll
-        </Button>
+        <div className="flex items-center gap-2">
+          <ResetModuleButton module="payroll" moduleLabel="Payroll" />
+          <Button onClick={() => setShowGenerate(true)} className="gap-2">
+            <Calculator className="w-4 h-4" /> Compute &amp; Generate Period Payroll
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -142,6 +165,7 @@ const PayrollPage = () => {
                       ETB {Number(row.total_pay).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-5 py-3.5 text-center">
+                      <div className="flex items-center justify-center gap-2">
                       <Button
                         size="sm"
                         variant={row.approved ? "default" : "outline"}
@@ -156,6 +180,17 @@ const PayrollPage = () => {
                         <Check className="w-3.5 h-3.5" />
                         {row.approved ? "Approved & Locked" : "Review & Approve"}
                       </Button>
+                      {canDelete && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1.5 h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setShowDeletePayroll({ id: row.id, workerName: row.worker?.name || "Worker" })}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -170,6 +205,28 @@ const PayrollPage = () => {
           </table>
         </div>
       </div>
+
+      {/* Delete Payroll Confirmation */}
+      <AlertDialog open={!!showDeletePayroll} onOpenChange={(v) => { if (!v) setShowDeletePayroll(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete payroll entry for {showDeletePayroll?.workerName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this payroll statement. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => showDeletePayroll && deletePayrollMutation.mutate(showDeletePayroll.id)}
+              disabled={deletePayrollMutation.isPending}
+            >
+              {deletePayrollMutation.isPending ? "Deleting..." : "Delete Entry"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Generate Payroll Dialog */}
       <Dialog open={showGenerate} onOpenChange={setShowGenerate}>

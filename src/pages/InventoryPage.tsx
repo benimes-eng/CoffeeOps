@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { Plus, Wrench, Package, Droplets, History, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { Plus, Wrench, Package, Droplets, History, ArrowDownLeft, ArrowUpRight, Trash2 } from "lucide-react";
+import { ResetModuleButton } from "@/components/common/ResetModuleButton";
+import { useRole } from "@/hooks/use-role";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -30,9 +33,25 @@ const InventoryPage = () => {
   const [activeTab, setActiveTab] = useState<string>("machinery");
   const [showAdd, setShowAdd] = useState(false);
   const [showMovement, setShowMovement] = useState<InventoryItemRow | null>(null);
+  const [showDeleteItem, setShowDeleteItem] = useState<InventoryItemRow | null>(null);
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useOrg();
+  const { hasMinRole } = useRole();
+  const canDelete = hasMinRole("manager");
+
+  const deleteItemMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.from("inventory_items").delete().eq("id", itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory-items"] });
+      toast({ title: "Item deleted", description: "Inventory item permanently removed." });
+      setShowDeleteItem(null);
+    },
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
 
   // New Item form
   const [name, setName] = useState("");
@@ -111,15 +130,18 @@ const InventoryPage = () => {
             Track equipment, consumables, and auditable stock movement ledgers
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setCategory(activeTab === "ledger" ? "machinery" : activeTab);
-            setShowAdd(true);
-          }}
-          className="gap-2"
-        >
-          <Plus className="w-4 h-4" /> Register New Asset
-        </Button>
+        <div className="flex items-center gap-2">
+          <ResetModuleButton module="inventory" moduleLabel="Inventory" />
+          <Button
+            onClick={() => {
+              setCategory(activeTab === "ledger" ? "machinery" : activeTab);
+              setShowAdd(true);
+            }}
+            className="gap-2"
+          >
+            <Plus className="w-4 h-4" /> Register New Asset
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -189,7 +211,7 @@ const InventoryPage = () => {
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">
                         {format(new Date(item.updated_at), "MMM dd, yyyy")}
                       </td>
-                      <td className="px-5 py-3.5 text-right">
+                      <td className="px-5 py-3.5 text-right space-x-2">
                         <Button
                           size="sm"
                           variant="outline"
@@ -198,6 +220,16 @@ const InventoryPage = () => {
                         >
                           <History className="w-3.5 h-3.5" /> Adjust / Movement
                         </Button>
+                        {canDelete && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1.5 h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setShowDeleteItem(item)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -411,6 +443,28 @@ const InventoryPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Item Confirmation */}
+      <AlertDialog open={!!showDeleteItem} onOpenChange={(v) => { if (!v) setShowDeleteItem(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {showDeleteItem?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this inventory asset and all associated stock movement records. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => showDeleteItem && deleteItemMutation.mutate(showDeleteItem.id)}
+              disabled={deleteItemMutation.isPending}
+            >
+              {deleteItemMutation.isPending ? "Deleting..." : "Delete Item"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

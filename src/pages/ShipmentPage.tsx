@@ -3,11 +3,17 @@ import { useShipments, useCreateShipment, useUpdateShipmentStatus, ShipmentWithL
 import { useLots } from "@/hooks/useLots";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck, Package, CheckCircle2, Clock, ArrowRight } from "lucide-react";
+import { Truck, Package, CheckCircle2, Clock, ArrowRight, Trash2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { deleteShipment } from "@/services/dataManagementService";
+import { ResetModuleButton } from "@/components/common/ResetModuleButton";
+import { useRole } from "@/hooks/use-role";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 const statusBadge: Record<string, string> = {
@@ -43,11 +49,26 @@ const ShipmentPage = () => {
   const [destination, setDestination] = useState<string>("Addis Ababa Dry Port (Kality)");
   const [customDest, setCustomDest] = useState("");
   const [shipDate, setShipDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [showDeleteShipment, setShowDeleteShipment] = useState<{ id: string; shipment_number: string | null } | null>(null);
 
   const { data: shipments, isLoading } = useShipments();
   const { data: readyLots } = useLots("ready_for_shipment");
   const createShipment = useCreateShipment();
   const updateStatus = useUpdateShipmentStatus();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { hasMinRole } = useRole();
+  const canDelete = hasMinRole("manager");
+
+  const deleteShipmentMutation = useMutation({
+    mutationFn: (shipmentId: string) => deleteShipment(shipmentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["shipments"] });
+      toast({ title: "Shipment deleted", description: "Shipment record permanently removed." });
+      setShowDeleteShipment(null);
+    },
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
 
   const handleCreate = () => {
     const finalDest = destination === "Other" ? customDest.trim() : destination;
@@ -82,13 +103,16 @@ const ShipmentPage = () => {
             Dispatch coffee consignments with document tracking and delivery verification
           </p>
         </div>
-        <Button
-          onClick={() => setShowCreate(true)}
-          className="gap-2"
-          disabled={!readyLots?.length}
-        >
-          <Truck className="w-4 h-4" /> Create Consignment Dispatch
-        </Button>
+        <div className="flex items-center gap-2">
+          <ResetModuleButton module="shipments" moduleLabel="Shipments" />
+          <Button
+            onClick={() => setShowCreate(true)}
+            className="gap-2"
+            disabled={!readyLots?.length}
+          >
+            <Truck className="w-4 h-4" /> Create Consignment Dispatch
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -185,7 +209,7 @@ const ShipmentPage = () => {
                           {s.status.replace("_", " ")}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-right">
+                      <td className="px-5 py-3.5 text-right space-x-2">
                         {next && (
                           <Button
                             size="sm"
@@ -203,6 +227,16 @@ const ShipmentPage = () => {
                             {label} <ArrowRight className="w-3 h-3" />
                           </Button>
                         )}
+                        {canDelete && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1.5 h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setShowDeleteShipment({ id: s.id, shipment_number: s.shipment_number })}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -218,6 +252,28 @@ const ShipmentPage = () => {
           </table>
         </div>
       </div>
+
+      {/* Delete Shipment Confirmation */}
+      <AlertDialog open={!!showDeleteShipment} onOpenChange={(v) => { if (!v) setShowDeleteShipment(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Shipment {showDeleteShipment?.shipment_number ?? ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this shipment record. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => showDeleteShipment && deleteShipmentMutation.mutate(showDeleteShipment.id)}
+              disabled={deleteShipmentMutation.isPending}
+            >
+              {deleteShipmentMutation.isPending ? "Deleting..." : "Delete Shipment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create Shipment Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
