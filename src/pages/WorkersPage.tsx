@@ -166,7 +166,7 @@ const WorkersPage = () => {
           <p className="text-muted-foreground mt-1">Manage farm personnel, log work activities, and track daily operational hours</p>
         </div>
         <div className="flex items-center gap-2">
-          <ResetModuleButton module="payroll" moduleLabel="Work Logs" />
+          <ResetModuleButton module="work_logs" moduleLabel="Work Logs" />
           {canManage && (
             <>
               <Button variant="outline" onClick={() => setShowLogWork(true)} className="gap-2">

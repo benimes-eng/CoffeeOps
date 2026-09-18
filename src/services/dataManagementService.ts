@@ -33,6 +33,18 @@ export async function deletePayroll(payrollId: string) {
   return data;
 }
 
+/**
+ * Delete an inventory item through the database's tenant-scoped authority.
+ * Items with ledger entries are deliberately retained to preserve stock history.
+ */
+export async function deleteInventoryItem(itemId: string) {
+  const { data, error } = await supabase.rpc("fn_delete_inventory_item", {
+    p_item_id: itemId,
+  });
+  if (error) throw parseSupabaseError(error);
+  return data;
+}
+
 export type ResettableModule =
   | "warehouse"
   | "beds"
@@ -41,6 +53,8 @@ export type ResettableModule =
   | "addis_hub"
   | "payroll"
   | "inventory"
+  | "work_logs"
+  | "sites"
   | "all";
 
 export async function resetTenantModuleData(module: ResettableModule) {

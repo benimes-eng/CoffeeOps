@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, Wrench, Package, Droplets, History, ArrowDownLeft, ArrowUpRight, Trash2 } from "lucide-react";
 import { ResetModuleButton } from "@/components/common/ResetModuleButton";
+import { deleteInventoryItem } from "@/services/dataManagementService";
 import { useRole } from "@/hooks/use-role";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -41,10 +42,7 @@ const InventoryPage = () => {
   const canDelete = hasMinRole("manager");
 
   const deleteItemMutation = useMutation({
-    mutationFn: async (itemId: string) => {
-      const { error } = await supabase.from("inventory_items").delete().eq("id", itemId);
-      if (error) throw error;
-    },
+    mutationFn: deleteInventoryItem,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory-items"] });
       toast({ title: "Item deleted", description: "Inventory item permanently removed." });
