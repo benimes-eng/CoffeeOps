@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { logAudit } from "@/services/auditService";
+import { callManageUsersFunction } from "@/services/adminService";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -117,14 +118,7 @@ const SettingsPage = () => {
   // ── Mutations ──────────────────────────────────────────────────
   const approveUser = useMutation({
     mutationFn: async (userId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: "approve", userId }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to approve user");
+      await callManageUsersFunction("approve", { userId });
       await logAudit("approve_user", "user", userId);
     },
     onSuccess: () => {
@@ -136,14 +130,7 @@ const SettingsPage = () => {
 
   const suspendUser = useMutation({
     mutationFn: async ({ userId, suspend }: { userId: string; suspend: boolean }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: suspend ? "suspend" : "approve", userId }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to update user status");
+      await callManageUsersFunction(suspend ? "suspend" : "approve", suspend ? { userId, suspend: true } : { userId });
       await logAudit(suspend ? "suspend_user" : "unsuspend_user", "user", userId);
     },
     onSuccess: (_, { suspend }) => {
@@ -155,15 +142,8 @@ const SettingsPage = () => {
 
   const rejectUser = useMutation({
     mutationFn: async (userId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
       await logAudit("reject_user", "user", userId);
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: "delete", userId }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to reject user");
+      await callManageUsersFunction("delete", { userId });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["all-org-users"] }); toast({ title: "User rejected and removed" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -172,14 +152,7 @@ const SettingsPage = () => {
   // Change a user's primary role authoritatively via manage-users edge function
   const changeRole = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: AppRole; existingRoleIds: string[] }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: "assign_role", userId, role: newRole }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to update role");
+      await callManageUsersFunction("assign_role", { userId, role: newRole });
       await logAudit("change_role", "user", userId, { role: newRole });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["all-org-users"] }); toast({ title: "Role updated successfully" }); },
@@ -188,14 +161,7 @@ const SettingsPage = () => {
 
   const deleteUser = useMutation({
     mutationFn: async (userId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: "delete", userId }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to delete user");
+      await callManageUsersFunction("delete", { userId });
       await logAudit("delete", "user", userId);
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["all-org-users"] }); toast({ title: "User removed from the system" }); },
@@ -212,14 +178,9 @@ const SettingsPage = () => {
   const createUser = useMutation({
     mutationFn: async () => {
       if (!newUserEmail.trim()) throw new Error("Email required");
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: "create", email: newUserEmail.trim(), name: newUserName.trim(), role: newUserRole, password: newUserPassword || undefined }),
+      const result = await callManageUsersFunction("create", {
+        email: newUserEmail.trim(), name: newUserName.trim(), role: newUserRole, password: newUserPassword || undefined,
       });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to create user");
       await logAudit("create", "user", result.user?.id, { email: newUserEmail, role: newUserRole });
       return result;
     },

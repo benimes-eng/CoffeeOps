@@ -34,8 +34,16 @@ export type PlatformAuditLog = {
   created_at: string;
 };
 
-async function callManageUsersFunction(action: string, payload: Record<string, unknown> = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
+export async function callManageUsersFunction(action: string, payload: Record<string, unknown> = {}) {
+  // Privileged actions must not reuse an access token that the browser kept in
+  // storage after it expired. Refresh first so the function receives a token
+  // minted by the current Supabase project/session.
+  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+  const session = refreshed.session;
+  if (refreshError || !session?.access_token) {
+    await supabase.auth.signOut({ scope: "local" });
+    throw new Error("UNAUTHORIZED: Your session has expired. Please sign in again.");
+  }
   if (!session?.access_token) {
     throw new Error("UNAUTHORIZED: Active authenticated session required");
   }
