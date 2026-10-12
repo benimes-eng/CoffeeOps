@@ -116,26 +116,23 @@ export async function validateSnapshot(snapshot: any): Promise<{ valid: boolean;
   return { valid: true };
 }
 
+export type SyncStrategy = "skip_existing" | "overwrite_existing";
+
 export interface SyncImportResult {
-  sitesUpserted: number;
-  blocksUpserted: number;
-  bedsUpserted: number;
-  lotsUpserted: number;
-  bedAssignmentsUpserted: number;
-  grindingBatchesUpserted: number;
-  shipmentsUpserted: number;
-  addisHubUpserted: number;
-  djiboutiUpserted: number;
-  workersUpserted: number;
-  workLogsUpserted: number;
-  payrollUpserted: number;
-  inventoryUpserted: number;
+  success: boolean;
+  strategy: SyncStrategy;
+  insertedCount: number;
+  updatedCount: number;
+  skippedCount: number;
 }
 
 /**
  * Authoritatively imports and merges operational snapshot data into the active organization via RPC
  */
-export async function importOperationalSnapshot(snapshot: OperationalSnapshot): Promise<SyncImportResult> {
+export async function importOperationalSnapshot(
+  snapshot: OperationalSnapshot,
+  strategy: SyncStrategy = "skip_existing"
+): Promise<SyncImportResult> {
   const validation = await validateSnapshot(snapshot);
   if (!validation.valid) {
     throw new Error(validation.error);
@@ -143,6 +140,7 @@ export async function importOperationalSnapshot(snapshot: OperationalSnapshot): 
 
   const { data, error } = await supabase.rpc("fn_import_operational_snapshot" as any, {
     p_snapshot_data: snapshot.data,
+    p_strategy: strategy,
   });
 
   if (error) throw parseSupabaseError(error);

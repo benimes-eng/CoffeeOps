@@ -39,6 +39,7 @@ export function OperationalSyncManager() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [pendingSnapshot, setPendingSnapshot] = useState<OperationalSnapshot | null>(null);
+  const [syncStrategy, setSyncStrategy] = useState<"skip_existing" | "overwrite_existing">("skip_existing");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOwner && !isSuperAdmin) {
@@ -103,6 +104,7 @@ export function OperationalSyncManager() {
       }
 
       setPendingSnapshot(parsed);
+      setSyncStrategy("skip_existing");
     } catch {
       toast({
         title: "Invalid JSON File",
@@ -122,12 +124,12 @@ export function OperationalSyncManager() {
 
     setIsImporting(true);
     try {
-      const res = await importOperationalSnapshot(pendingSnapshot);
+      const res = await importOperationalSnapshot(pendingSnapshot, syncStrategy);
       await queryClient.invalidateQueries();
 
       toast({
         title: "Synchronization Complete",
-        description: `Merged ${res.lotsUpserted} lots, ${res.workersUpserted} workers, ${res.bedsUpserted} beds, and ${res.shipmentsUpserted} shipments.`,
+        description: `Added ${res.insertedCount} new records, updated ${res.updatedCount} records, and kept ${res.skippedCount} existing records unchanged.`,
       });
       setPendingSnapshot(null);
     } catch (e: any) {
@@ -248,8 +250,52 @@ export function OperationalSyncManager() {
                   </div>
                 </div>
 
+                {/* Conflict Resolution Strategy Options */}
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs font-semibold text-foreground">Import & Conflict Strategy:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSyncStrategy("skip_existing")}
+                      className={`cursor-pointer rounded-lg p-3 border transition-all text-xs flex flex-col justify-between select-none ${
+                        syncStrategy === "skip_existing"
+                          ? "border-emerald-600 bg-emerald-500/10 text-foreground ring-1 ring-emerald-600"
+                          : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
+                        <CheckCircle2 className={`w-3.5 h-3.5 ${syncStrategy === "skip_existing" ? "text-emerald-600" : "text-muted-foreground"}`} />
+                        Merge New Only (Safe)
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Preserves all existing cloud records as they are. Only new records will be added. No duplicate records.
+                      </p>
+                    </div>
+
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSyncStrategy("overwrite_existing")}
+                      className={`cursor-pointer rounded-lg p-3 border transition-all text-xs flex flex-col justify-between select-none ${
+                        syncStrategy === "overwrite_existing"
+                          ? "border-amber-600 bg-amber-500/10 text-foreground ring-1 ring-amber-600"
+                          : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
+                        <RefreshCw className={`w-3.5 h-3.5 ${syncStrategy === "overwrite_existing" ? "text-amber-600" : "text-muted-foreground"}`} />
+                        Replace & Overwrite
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Replaces matching existing records with values from the backup, and imports any new records.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <p className="text-xs bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 p-2.5 rounded border border-emerald-500/20">
-                  💡 <strong>Non-destructive Sync:</strong> Records will be merged by lot numbers and employee names. Existing cloud records won't be wiped.
+                  💡 <strong>Zero Duplication:</strong> Records are identified by natural keys (Lot number, Worker name, Bed number). Same data will never be duplicated.
                 </p>
               </div>
             </AlertDialogDescription>
