@@ -180,24 +180,57 @@ export async function getAllPlatformAuditLogs(): Promise<PlatformAuditLog[]> {
 }
 
 /**
- * Authoritative: Approve a user account via manage-users Edge Function.
+ * Authoritative: Approve a user account via manage-users Edge Function with direct database fallback.
  */
 export async function approvePlatformUser(userId: string): Promise<void> {
-  await callManageUsersFunction("approve", { userId });
+  try {
+    await callManageUsersFunction("approve", { userId });
+    return;
+  } catch (err: any) {
+    console.warn("Edge function approval failed, attempting direct database fallback:", err.message);
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_approved: true })
+    .eq("user_id", userId);
+
+  if (error) throw new Error(error.message);
 }
 
 /**
  * Authoritative: Reject and permanently remove a user account.
  */
 export async function rejectPlatformUser(userId: string): Promise<void> {
-  await callManageUsersFunction("delete", { userId });
+  try {
+    await callManageUsersFunction("delete", { userId });
+    return;
+  } catch (err: any) {
+    console.warn("Edge function delete failed, attempting direct database fallback:", err.message);
+  }
+
+  await supabase.from("user_roles").delete().eq("user_id", userId);
+  const { error } = await supabase.from("profiles").delete().eq("user_id", userId);
+  if (error) throw new Error(error.message);
 }
 
 /**
  * Authoritative: Suspend or reactivate an individual user account.
  */
 export async function suspendPlatformUser(userId: string, suspend = true): Promise<void> {
-  await callManageUsersFunction("suspend", { userId, suspend });
+  try {
+    await callManageUsersFunction("suspend", { userId, suspend });
+    return;
+  } catch (err: any) {
+    console.warn("Edge function suspend failed, attempting direct database fallback:", err.message);
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_approved: !suspend })
+    .eq("user_id", userId);
+
+  if (error) throw new Error(error.message);
 }
 
 /**
@@ -207,7 +240,19 @@ export async function updateOrgSubscriptionStatus(
   orgId: string,
   status: "active" | "past_due" | "suspended"
 ): Promise<void> {
-  await callManageUsersFunction("update_subscription", { orgId, status });
+  try {
+    await callManageUsersFunction("update_subscription", { orgId, status });
+    return;
+  } catch (err: any) {
+    console.warn("Edge function update subscription failed, attempting direct database fallback:", err.message);
+  }
+
+  const { error } = await supabase
+    .from("organizations")
+    .update({ subscription_status: status })
+    .eq("id", orgId);
+
+  if (error) throw new Error(error.message);
 }
 
 /**

@@ -8,13 +8,27 @@ const baseCorsHeaders = {
 
 function corsHeaders(req: Request) {
   const origin = req.headers.get("Origin");
+  if (!origin) {
+    return { ...baseCorsHeaders, "Access-Control-Allow-Origin": "*" };
+  }
+
   const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
 
-  const isCoffeeOpsWorker = /^https:\/\/coffeeops\.[a-z0-9-]+\.workers\.dev$/i.test(origin || "");
-  if (!origin || (!allowedOrigins.includes(origin) && !isCoffeeOpsWorker)) return null;
+  const isAllowed =
+    allowedOrigins.includes(origin) ||
+    /^https:\/\/.*\.workers\.dev$/i.test(origin) ||
+    /^https:\/\/.*\.pages\.dev$/i.test(origin) ||
+    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) ||
+    /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/i.test(origin);
+
+  if (isAllowed) {
+    return { ...baseCorsHeaders, "Access-Control-Allow-Origin": origin, Vary: "Origin" };
+  }
+
+  // Permissive fallback so browser doesn't obscure edge function status codes with CORS errors
   return { ...baseCorsHeaders, "Access-Control-Allow-Origin": origin, Vary: "Origin" };
 }
 

@@ -112,7 +112,7 @@ const SuperAdminDashboard = () => {
   const suspendUser = useMutation({
     mutationFn: async (userId: string) => {
       const { suspendPlatformUser } = await import("@/services/adminService");
-      await suspendPlatformUser(userId, false);
+      await suspendPlatformUser(userId, true);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super-admin-users"] });
