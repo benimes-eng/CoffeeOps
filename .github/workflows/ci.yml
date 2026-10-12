@@ -32,6 +32,9 @@ jobs:
 
       - name: Run Unit & Security Tests
         run: npm run test
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'placeholder-key' }}
 
       - name: Dependency vulnerability gate
         run: npm audit --omit=dev --audit-level=high
