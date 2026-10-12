@@ -232,15 +232,15 @@ const SettingsPage = () => {
               <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Target Moisture (%)</label>
               <input type="number" defaultValue="11.5" className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
             </div>
-
-        {/* Data Sync & Export/Import */}
-        <OperationalSyncManager />
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Standard Drying Days</label>
               <input type="number" defaultValue="14" className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
             </div>
           </div>
         </div>
+
+        {/* Local & Cloud Data Synchronization */}
+        <OperationalSyncManager />
 
         {/* Role Reference Card */}
         {canManageUsers && (

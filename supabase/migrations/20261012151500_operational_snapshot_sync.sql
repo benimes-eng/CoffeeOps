@@ -31,9 +31,7 @@ DECLARE
   v_target_bed_id UUID;
   v_target_lot_id UUID;
   v_target_worker_id UUID;
-  v_target_assignment_id UUID;
   v_target_item_id UUID;
-  v_target_hub_id UUID;
 BEGIN
   -- 1. Enforce active tenant actor permissions (owners and super_admins only)
   v_org_id := public.assert_active_tenant_actor(ARRAY['owner', 'super_admin']::public.app_role[]);
@@ -45,14 +43,23 @@ BEGIN
   IF p_snapshot_data ? 'sites' AND jsonb_typeof(p_snapshot_data->'sites') = 'array' THEN
     FOR r IN SELECT * FROM jsonb_array_elements(p_snapshot_data->'sites')
     LOOP
-      INSERT INTO public.sites (organization_id, name, location, created_at)
-      VALUES (
-        v_org_id,
-        r->>'name',
-        r->>'location',
-        COALESCE((r->>'created_at')::timestamptz, now())
-      )
-      ON CONFLICT DO NOTHING;
+      SELECT id INTO v_target_site_id FROM public.sites
+      WHERE organization_id = v_org_id AND lower(name) = lower(r->>'name')
+      LIMIT 1;
+
+      IF v_target_site_id IS NULL THEN
+        INSERT INTO public.sites (organization_id, name, location, created_at)
+        VALUES (
+          v_org_id,
+          r->>'name',
+          r->>'location',
+          COALESCE((r->>'created_at')::timestamptz, now())
+        );
+      ELSE
+        UPDATE public.sites SET
+          location = COALESCE(r->>'location', location)
+        WHERE id = v_target_site_id;
+      END IF;
       v_sites_count := v_sites_count + 1;
     END LOOP;
   END IF;
@@ -62,7 +69,7 @@ BEGIN
     FOR r IN SELECT * FROM jsonb_array_elements(p_snapshot_data->'blocks')
     LOOP
       SELECT id INTO v_target_site_id FROM public.sites
-      WHERE organization_id = v_org_id AND name = (r->>'site_name')
+      WHERE organization_id = v_org_id AND (id = (r->>'site_id')::uuid OR lower(name) = lower(r->>'site_name'))
       LIMIT 1;
 
       IF v_target_site_id IS NULL THEN
@@ -72,25 +79,31 @@ BEGIN
       END IF;
 
       IF v_target_site_id IS NOT NULL THEN
-        INSERT INTO public.blocks (organization_id, site_id, name, created_at)
-        VALUES (
-          v_org_id,
-          v_target_site_id,
-          r->>'name',
-          COALESCE((r->>'created_at')::timestamptz, now())
-        )
-        ON CONFLICT DO NOTHING;
+        SELECT id INTO v_target_block_id FROM public.blocks
+        WHERE organization_id = v_org_id AND site_id = v_target_site_id AND lower(name) = lower(r->>'name')
+        LIMIT 1;
+
+        IF v_target_block_id IS NULL THEN
+          INSERT INTO public.blocks (organization_id, site_id, name, created_at)
+          VALUES (
+            v_org_id,
+            v_target_site_id,
+            r->>'name',
+            COALESCE((r->>'created_at')::timestamptz, now())
+          );
+        END IF;
         v_blocks_count := v_blocks_count + 1;
       END IF;
     END LOOP;
   END IF;
 
   -- 4. Upsert BEDS (Natural key: block_id, bed_number)
+  -- Note: surface_area is generated stored (length * width). The column is material_type (not mesh_type).
   IF p_snapshot_data ? 'beds' AND jsonb_typeof(p_snapshot_data->'beds') = 'array' THEN
     FOR r IN SELECT * FROM jsonb_array_elements(p_snapshot_data->'beds')
     LOOP
       SELECT b.id INTO v_target_block_id FROM public.blocks b
-      WHERE b.organization_id = v_org_id AND b.name = (r->>'block_name')
+      WHERE b.organization_id = v_org_id AND (b.id = (r->>'block_id')::uuid OR lower(b.name) = lower(r->>'block_name'))
       LIMIT 1;
 
       IF v_target_block_id IS NULL THEN
@@ -100,20 +113,31 @@ BEGIN
       END IF;
 
       IF v_target_block_id IS NOT NULL THEN
-        INSERT INTO public.beds (
-          organization_id, block_id, bed_number, length, width, surface_area, mesh_type, status, notes
-        ) VALUES (
-          v_org_id,
-          v_target_block_id,
-          r->>'bed_number',
-          COALESCE((r->>'length')::numeric, 10),
-          COALESCE((r->>'width')::numeric, 1.5),
-          COALESCE((r->>'surface_area')::numeric, 15),
-          COALESCE(r->>'mesh_type', 'wire'),
-          COALESCE((r->>'status')::public.bed_status, 'empty'::public.bed_status),
-          r->>'notes'
-        )
-        ON CONFLICT DO NOTHING;
+        SELECT id INTO v_target_bed_id FROM public.beds
+        WHERE organization_id = v_org_id AND block_id = v_target_block_id AND bed_number = (r->>'bed_number')
+        LIMIT 1;
+
+        IF v_target_bed_id IS NULL THEN
+          INSERT INTO public.beds (
+            organization_id, block_id, bed_number, length, width, material_type, status
+          ) VALUES (
+            v_org_id,
+            v_target_block_id,
+            r->>'bed_number',
+            COALESCE((r->>'length')::numeric, 10),
+            COALESCE((r->>'width')::numeric, 1.5),
+            COALESCE(r->>'material_type', r->>'mesh_type', 'wire mesh'),
+            COALESCE((r->>'status')::public.bed_status, 'empty'::public.bed_status)
+          );
+        ELSE
+          UPDATE public.beds SET
+            length = COALESCE((r->>'length')::numeric, length),
+            width = COALESCE((r->>'width')::numeric, width),
+            material_type = COALESCE(r->>'material_type', r->>'mesh_type', material_type),
+            status = COALESCE((r->>'status')::public.bed_status, status),
+            updated_at = now()
+          WHERE id = v_target_bed_id;
+        END IF;
         v_beds_count := v_beds_count + 1;
       END IF;
     END LOOP;
@@ -128,7 +152,7 @@ BEGIN
       ) VALUES (
         v_org_id,
         r->>'lot_number',
-        r->>'region',
+        COALESCE(r->>'region', 'Yirgacheffe'),
         COALESCE((r->>'initial_weight')::numeric, 0),
         COALESCE((r->>'current_weight')::numeric, 0),
         COALESCE((r->>'intake_date')::date, CURRENT_DATE),
@@ -157,20 +181,22 @@ BEGIN
 
       IF v_target_worker_id IS NULL THEN
         INSERT INTO public.workers (
-          organization_id, name, role, wage_type, wage_rate, status, hire_date
+          organization_id, name, role, wage_type, wage_rate, status
         ) VALUES (
           v_org_id,
           r->>'name',
           r->>'role',
           COALESCE((r->>'wage_type')::public.wage_type, 'daily'::public.wage_type),
           COALESCE((r->>'wage_rate')::numeric, 0),
-          COALESCE((r->>'status')::public.worker_status, 'active'::public.worker_status),
-          COALESCE((r->>'hire_date')::date, CURRENT_DATE)
+          COALESCE((r->>'status')::public.worker_status, 'active'::public.worker_status)
         );
       ELSE
         UPDATE public.workers SET
+          role = COALESCE(r->>'role', role),
+          wage_type = COALESCE((r->>'wage_type')::public.wage_type, wage_type),
           wage_rate = COALESCE((r->>'wage_rate')::numeric, wage_rate),
-          status = COALESCE((r->>'status')::public.worker_status, status)
+          status = COALESCE((r->>'status')::public.worker_status, status),
+          updated_at = now()
         WHERE id = v_target_worker_id;
       END IF;
       v_workers_count := v_workers_count + 1;
@@ -187,14 +213,13 @@ BEGIN
 
       IF v_target_worker_id IS NOT NULL THEN
         INSERT INTO public.work_logs (
-          organization_id, worker_id, date, hours_worked, activity_type, notes
+          organization_id, worker_id, date, hours_worked, activity_type
         ) VALUES (
           v_org_id,
           v_target_worker_id,
           COALESCE((r->>'date')::date, CURRENT_DATE),
           COALESCE((r->>'hours_worked')::numeric, 8),
-          COALESCE(r->>'activity_type', 'General'),
-          r->>'notes'
+          COALESCE(r->>'activity_type', 'General')
         );
         v_logs_count := v_logs_count + 1;
       END IF;
@@ -220,8 +245,7 @@ BEGIN
           COALESCE((r->>'total_hours')::numeric, 0),
           COALESCE((r->>'total_pay')::numeric, 0),
           COALESCE((r->>'approved')::boolean, false)
-        )
-        ON CONFLICT DO NOTHING;
+        );
         v_payroll_count := v_payroll_count + 1;
       END IF;
     END LOOP;
@@ -237,16 +261,15 @@ BEGIN
 
       IF v_target_lot_id IS NOT NULL THEN
         INSERT INTO public.grinding_batches (
-          organization_id, lot_id, dry_weight, ground_weight, milling_loss, status, start_time, end_time
+          organization_id, lot_id, dry_weight, ground_weight, status, started_at, completed_at
         ) VALUES (
           v_org_id,
           v_target_lot_id,
           COALESCE((r->>'dry_weight')::numeric, 0),
           (r->>'ground_weight')::numeric,
-          (r->>'milling_loss')::numeric,
           COALESCE(r->>'status', 'completed'),
-          COALESCE((r->>'start_time')::timestamptz, now()),
-          (r->>'end_time')::timestamptz
+          COALESCE((r->>'started_at')::timestamptz, (r->>'start_time')::timestamptz, now()),
+          COALESCE((r->>'completed_at')::timestamptz, (r->>'end_time')::timestamptz)
         );
         v_grinding_count := v_grinding_count + 1;
       END IF;
@@ -263,7 +286,7 @@ BEGIN
 
       IF v_target_lot_id IS NOT NULL THEN
         INSERT INTO public.shipments (
-          organization_id, lot_id, shipment_number, destination, weight, shipment_date, status, notes
+          organization_id, lot_id, shipment_number, destination, weight, shipment_date, status
         ) VALUES (
           v_org_id,
           v_target_lot_id,
@@ -271,10 +294,8 @@ BEGIN
           COALESCE(r->>'destination', 'Addis Ababa Dry Port (Kality)'),
           COALESCE((r->>'weight')::numeric, 0),
           COALESCE((r->>'shipment_date')::date, CURRENT_DATE),
-          COALESCE(r->>'status', 'preparing'),
-          r->>'notes'
-        )
-        ON CONFLICT DO NOTHING;
+          COALESCE(r->>'status', 'preparing')
+        );
         v_shipments_count := v_shipments_count + 1;
       END IF;
     END LOOP;
@@ -290,9 +311,9 @@ BEGIN
         v_org_id,
         r->>'lot_number',
         COALESCE(r->>'region', 'Yirgacheffe'),
-        COALESCE((r->>'incoming_weight')::numeric, 0),
-        COALESCE((r->>'current_weight')::numeric, 0),
-        COALESCE((r->>'moisture_percentage')::numeric, 11.5),
+        COALESCE((r->>'incoming_weight')::numeric, 1),
+        COALESCE((r->>'current_weight')::numeric, 1),
+        (r->>'moisture_percentage')::numeric,
         COALESCE(r->>'warehouse_bay', 'Bay-A1'),
         COALESCE(r->>'status', 'in_storage'),
         COALESCE((r->>'received_at')::timestamptz, now())
@@ -301,40 +322,56 @@ BEGIN
     END LOOP;
   END IF;
 
-  -- 12. Upsert INVENTORY ITEMS & MOVEMENTS
+  -- 12. Upsert INVENTORY ITEMS
   IF p_snapshot_data ? 'inventory_items' AND jsonb_typeof(p_snapshot_data->'inventory_items') = 'array' THEN
     FOR r IN SELECT * FROM jsonb_array_elements(p_snapshot_data->'inventory_items')
     LOOP
-      INSERT INTO public.inventory_items (
-        organization_id, name, category, quantity, unit, location
-      ) VALUES (
-        v_org_id,
-        r->>'name',
-        COALESCE((r->>'category')::public.inventory_category, 'machinery'::public.inventory_category),
-        COALESCE((r->>'quantity')::numeric, 0),
-        r->>'unit',
-        r->>'location'
-      );
+      SELECT id INTO v_target_item_id FROM public.inventory_items
+      WHERE organization_id = v_org_id AND lower(name) = lower(r->>'name')
+      LIMIT 1;
+
+      IF v_target_item_id IS NULL THEN
+        INSERT INTO public.inventory_items (
+          organization_id, name, category, quantity, unit, location
+        ) VALUES (
+          v_org_id,
+          r->>'name',
+          COALESCE((r->>'category')::public.inventory_category, 'machinery'::public.inventory_category),
+          COALESCE((r->>'quantity')::numeric, 0),
+          r->>'unit',
+          r->>'location'
+        );
+      ELSE
+        UPDATE public.inventory_items SET
+          quantity = COALESCE((r->>'quantity')::numeric, quantity),
+          location = COALESCE(r->>'location', location)
+        WHERE id = v_target_item_id;
+      END IF;
       v_inv_count := v_inv_count + 1;
     END LOOP;
   END IF;
 
   -- 13. Audit Log
   INSERT INTO public.audit_logs (
-    organization_id, user_id, action, entity_type, entity_id, new_values
+    organization_id, user_id, action, entity_type, entity_id, details
   ) VALUES (
     v_org_id,
     auth.uid(),
     'sync_import',
     'operational_snapshot',
-    v_org_id,
+    v_org_id::text,
     jsonb_build_object(
       'sites', v_sites_count,
+      'blocks', v_blocks_count,
       'beds', v_beds_count,
       'lots', v_lots_count,
       'workers', v_workers_count,
+      'work_logs', v_logs_count,
       'payroll', v_payroll_count,
-      'shipments', v_shipments_count
+      'grinding', v_grinding_count,
+      'shipments', v_shipments_count,
+      'addis_hub', v_addis_count,
+      'inventory', v_inv_count
     )
   );
 

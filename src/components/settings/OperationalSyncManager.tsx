@@ -215,41 +215,43 @@ export function OperationalSyncManager() {
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               Verify & Synchronize Operation
             </div>
-            <AlertDialogDescription className="space-y-3 pt-2 text-left">
-              <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-1.5 border border-border/50">
-                <div className="flex items-center justify-between font-mono">
-                  <span className="text-muted-foreground">Exported Date:</span>
-                  <span className="text-foreground font-medium">
-                    {pendingSnapshot ? new Date(pendingSnapshot.exportedAt).toLocaleString() : ""}
-                  </span>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-2 text-left">
+                <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-1.5 border border-border/50">
+                  <div className="flex items-center justify-between font-mono">
+                    <span className="text-muted-foreground">Exported Date:</span>
+                    <span className="text-foreground font-medium">
+                      {pendingSnapshot ? new Date(pendingSnapshot.exportedAt).toLocaleString() : ""}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between font-mono">
+                    <span className="text-muted-foreground">Original Estate:</span>
+                    <span className="text-foreground font-medium">{pendingSnapshot?.organizationName}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-mono">
+                    <span className="text-muted-foreground">Integrity SHA-256:</span>
+                    <span className="text-foreground font-medium truncate max-w-[200px]">
+                      {pendingSnapshot?.checksum.slice(0, 16)}...
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between font-mono">
-                  <span className="text-muted-foreground">Original Estate:</span>
-                  <span className="text-foreground font-medium">{pendingSnapshot?.organizationName}</span>
-                </div>
-                <div className="flex items-center justify-between font-mono">
-                  <span className="text-muted-foreground">Integrity SHA-256:</span>
-                  <span className="text-foreground font-medium truncate max-w-[200px]">
-                    {pendingSnapshot?.checksum.slice(0, 16)}...
-                  </span>
-                </div>
-              </div>
 
-              <div className="text-xs text-muted-foreground">
-                <p className="font-medium text-foreground mb-1">Payload Summary:</p>
-                <div className="grid grid-cols-2 gap-1 text-[11px] font-mono">
-                  <span>Lots: {pendingSnapshot?.counts.lots || 0}</span>
-                  <span>Beds: {pendingSnapshot?.counts.beds || 0}</span>
-                  <span>Workers: {pendingSnapshot?.counts.workers || 0}</span>
-                  <span>Work Logs: {pendingSnapshot?.counts.work_logs || 0}</span>
-                  <span>Payroll: {pendingSnapshot?.counts.payroll || 0}</span>
-                  <span>Shipments: {pendingSnapshot?.counts.shipments || 0}</span>
+                <div className="text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground mb-1">Payload Summary:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px] font-mono">
+                    <span className="bg-background/80 p-1 rounded border">Lots: {pendingSnapshot?.counts.lots || 0}</span>
+                    <span className="bg-background/80 p-1 rounded border">Beds: {pendingSnapshot?.counts.beds || 0}</span>
+                    <span className="bg-background/80 p-1 rounded border">Workers: {pendingSnapshot?.counts.workers || 0}</span>
+                    <span className="bg-background/80 p-1 rounded border">Work Logs: {pendingSnapshot?.counts.work_logs || 0}</span>
+                    <span className="bg-background/80 p-1 rounded border">Payroll: {pendingSnapshot?.counts.payroll || 0}</span>
+                    <span className="bg-background/80 p-1 rounded border">Shipments: {pendingSnapshot?.counts.shipments || 0}</span>
+                  </div>
                 </div>
-              </div>
 
-              <p className="text-xs bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 p-2.5 rounded border border-emerald-500/20">
-                💡 <strong>Non-destructive Sync:</strong> Records will be merged by lot numbers and employee names. Existing cloud records won't be wiped.
-              </p>
+                <p className="text-xs bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 p-2.5 rounded border border-emerald-500/20">
+                  💡 <strong>Non-destructive Sync:</strong> Records will be merged by lot numbers and employee names. Existing cloud records won't be wiped.
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
