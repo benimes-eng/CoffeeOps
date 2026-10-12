@@ -239,14 +239,20 @@ export function OperationalSyncManager() {
                 </div>
 
                 <div className="text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground mb-1">Payload Summary:</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px] font-mono">
-                    <span className="bg-background/80 p-1 rounded border">Lots: {pendingSnapshot?.counts.lots || 0}</span>
-                    <span className="bg-background/80 p-1 rounded border">Beds: {pendingSnapshot?.counts.beds || 0}</span>
-                    <span className="bg-background/80 p-1 rounded border">Workers: {pendingSnapshot?.counts.workers || 0}</span>
-                    <span className="bg-background/80 p-1 rounded border">Work Logs: {pendingSnapshot?.counts.work_logs || 0}</span>
-                    <span className="bg-background/80 p-1 rounded border">Payroll: {pendingSnapshot?.counts.payroll || 0}</span>
-                    <span className="bg-background/80 p-1 rounded border">Shipments: {pendingSnapshot?.counts.shipments || 0}</span>
+                  <p className="font-medium text-foreground mb-1">Payload Lifecycle Summary:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px] font-mono">
+                    <span className="bg-background/80 p-1.5 rounded border">Lots: {pendingSnapshot?.counts.lots || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Beds: {pendingSnapshot?.counts.beds || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Assignments: {pendingSnapshot?.counts.bed_assignments || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Bed Logs: {pendingSnapshot?.counts.bed_activity_logs || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Grinding: {pendingSnapshot?.counts.grinding_batches || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Shipments: {pendingSnapshot?.counts.shipments || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Addis Hub: {pendingSnapshot?.counts.addis_hub_inventory || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Dispatches: {pendingSnapshot?.counts.djibouti_dispatches || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Workers: {pendingSnapshot?.counts.workers || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Work Logs: {pendingSnapshot?.counts.work_logs || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Payroll: {pendingSnapshot?.counts.payroll || 0}</span>
+                    <span className="bg-background/80 p-1.5 rounded border">Inventory: {pendingSnapshot?.counts.inventory_items || 0}</span>
                   </div>
                 </div>
 

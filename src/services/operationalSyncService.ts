@@ -40,45 +40,138 @@ export async function computeChecksum(content: string): Promise<string> {
 }
 
 /**
- * Exports all operational records for the current tenant
+ * Exports all operational records for the current tenant with relational context preserved
  */
 export async function exportOperationalSnapshot(orgId: string, orgName?: string): Promise<OperationalSnapshot> {
-  const tables = [
-    "sites",
-    "blocks",
-    "beds",
-    "lots",
-    "bed_assignments",
-    "bed_activity_logs",
-    "grinding_batches",
-    "shipments",
-    "addis_hub_inventory",
-    "djibouti_dispatches",
-    "workers",
-    "work_logs",
-    "payroll",
-    "inventory_items",
-    "inventory_movements",
-  ] as const;
+  const [
+    sitesRes,
+    blocksRes,
+    bedsRes,
+    lotsRes,
+    assignmentsRes,
+    activityLogsRes,
+    grindingRes,
+    shipmentsRes,
+    addisHubRes,
+    djiboutiRes,
+    workersRes,
+    workLogsRes,
+    payrollRes,
+    inventoryRes,
+    movementsRes,
+  ] = await Promise.all([
+    supabase.from("sites").select("*").eq("organization_id", orgId),
+    supabase.from("blocks").select("*, sites(name)").eq("organization_id", orgId),
+    supabase.from("beds").select("*, blocks(name, sites(name))").eq("organization_id", orgId),
+    supabase.from("lots").select("*").eq("organization_id", orgId).order("created_at", { ascending: true }),
+    supabase.from("bed_assignments").select("*, beds(bed_number, blocks(name)), lots(lot_number)").eq("organization_id", orgId),
+    supabase.from("bed_activity_logs").select("*, beds(bed_number)").eq("organization_id", orgId).order("created_at", { ascending: true }),
+    supabase.from("grinding_batches").select("*, lots(lot_number)").eq("organization_id", orgId),
+    supabase.from("shipments").select("*, lots(lot_number)").eq("organization_id", orgId),
+    supabase.from("addis_hub_inventory").select("*").eq("organization_id", orgId),
+    supabase.from("djibouti_dispatches").select("*, addis_hub_inventory(lot_number)").eq("organization_id", orgId),
+    supabase.from("workers").select("*").eq("organization_id", orgId),
+    supabase.from("work_logs").select("*, workers(name)").eq("organization_id", orgId),
+    supabase.from("payroll").select("*, workers(name)").eq("organization_id", orgId),
+    supabase.from("inventory_items").select("*").eq("organization_id", orgId),
+    supabase.from("inventory_movements").select("*, inventory_items(name)").eq("organization_id", orgId),
+  ]);
 
-  const data: OperationalSnapshotData = {};
-  const counts: Record<string, number> = {};
+  const sites = sitesRes.data || [];
+  const blocks = (blocksRes.data || []).map((b: any) => ({
+    ...b,
+    site_name: b.sites?.name,
+    sites: undefined,
+  }));
+  const beds = (bedsRes.data || []).map((bed: any) => ({
+    ...bed,
+    block_name: bed.blocks?.name,
+    site_name: bed.blocks?.sites?.name,
+    blocks: undefined,
+  }));
+  const lots = lotsRes.data || [];
+  const bed_assignments = (assignmentsRes.data || []).map((ba: any) => ({
+    ...ba,
+    bed_number: ba.beds?.bed_number,
+    block_name: ba.beds?.blocks?.name,
+    lot_number: ba.lots?.lot_number,
+    beds: undefined,
+    lots: undefined,
+  }));
+  const bed_activity_logs = (activityLogsRes.data || []).map((bal: any) => ({
+    ...bal,
+    bed_number: bal.beds?.bed_number,
+    beds: undefined,
+  }));
+  const grinding_batches = (grindingRes.data || []).map((gb: any) => ({
+    ...gb,
+    lot_number: gb.lots?.lot_number,
+    lots: undefined,
+  }));
+  const shipments = (shipmentsRes.data || []).map((s: any) => ({
+    ...s,
+    lot_number: s.lots?.lot_number,
+    lots: undefined,
+  }));
+  const addis_hub_inventory = addisHubRes.data || [];
+  const djibouti_dispatches = (djiboutiRes.data || []).map((dd: any) => ({
+    ...dd,
+    lot_number: dd.addis_hub_inventory?.lot_number,
+    addis_hub_inventory: undefined,
+  }));
+  const workers = workersRes.data || [];
+  const work_logs = (workLogsRes.data || []).map((wl: any) => ({
+    ...wl,
+    worker_name: wl.workers?.name,
+    workers: undefined,
+  }));
+  const payroll = (payrollRes.data || []).map((p: any) => ({
+    ...p,
+    worker_name: p.workers?.name,
+    workers: undefined,
+  }));
+  const inventory_items = inventoryRes.data || [];
+  const inventory_movements = (movementsRes.data || []).map((im: any) => ({
+    ...im,
+    item_name: im.inventory_items?.name,
+    inventory_items: undefined,
+  }));
 
-  for (const table of tables) {
-    const { data: rows, error } = await supabase
-      .from(table as any)
-      .select("*")
-      .eq("organization_id", orgId);
+  const data: OperationalSnapshotData = {
+    sites,
+    blocks,
+    beds,
+    lots,
+    bed_assignments,
+    bed_activity_logs,
+    grinding_batches,
+    shipments,
+    addis_hub_inventory,
+    djibouti_dispatches,
+    workers,
+    work_logs,
+    payroll,
+    inventory_items,
+    inventory_movements,
+  };
 
-    if (error) {
-      console.warn(`Export warning for ${table}:`, error.message);
-      data[table as keyof OperationalSnapshotData] = [];
-      counts[table] = 0;
-    } else {
-      data[table as keyof OperationalSnapshotData] = rows || [];
-      counts[table] = (rows || []).length;
-    }
-  }
+  const counts: Record<string, number> = {
+    sites: sites.length,
+    blocks: blocks.length,
+    beds: beds.length,
+    lots: lots.length,
+    bed_assignments: bed_assignments.length,
+    bed_activity_logs: bed_activity_logs.length,
+    grinding_batches: grinding_batches.length,
+    shipments: shipments.length,
+    addis_hub_inventory: addis_hub_inventory.length,
+    djibouti_dispatches: djibouti_dispatches.length,
+    workers: workers.length,
+    work_logs: work_logs.length,
+    payroll: payroll.length,
+    inventory_items: inventory_items.length,
+    inventory_movements: inventory_movements.length,
+  };
 
   const payloadString = JSON.stringify(data);
   const checksum = await computeChecksum(payloadString);
