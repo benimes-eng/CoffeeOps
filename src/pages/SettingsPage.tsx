@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { logAudit } from "@/services/auditService";
+import { OperationalSyncManager } from "@/components/settings/OperationalSyncManager";
 import { callManageUsersFunction } from "@/services/adminService";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -231,6 +232,9 @@ const SettingsPage = () => {
               <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Target Moisture (%)</label>
               <input type="number" defaultValue="11.5" className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
             </div>
+
+        {/* Data Sync & Export/Import */}
+        <OperationalSyncManager />
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Standard Drying Days</label>
               <input type="number" defaultValue="14" className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
